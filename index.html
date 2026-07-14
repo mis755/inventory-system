@@ -9,21 +9,24 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper: #ECEAE1;
+    --paper: #EEF1F6;
     --card: #FFFFFF;
     --ink: #1F2421;
     --ink-soft: #5C6360;
-    --line: #D8D5C8;
-    --line-strong: #B9B5A4;
+    --line: #E1E5EE;
+    --line-strong: #C7CEDC;
     --orange: #D65A1F;
     --orange-deep: #A8420F;
     --orange-tint: #FBE6D8;
-    --blue: #3B6E8F;
-    --blue-tint: #E1EBF0;
+    --blue: #2F6FED;
+    --blue-deep: #1E54C4;
+    --blue-tint: #E7EFFE;
     --olive: #5C7A3B;
     --olive-tint: #E9F0DE;
     --red: #B23A2E;
     --red-tint: #F6DFDB;
+    --bar-red: #E14848;
+    --bar-red-deep: #C93737;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
@@ -32,8 +35,12 @@
   .brandrow{display:flex;justify-content:space-between;align-items:flex-start;padding:0 6px;}
   .brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:-0.01em;}
   .brand small{display:block;font-family:'Inter',sans-serif;font-weight:500;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.08em;margin-top:2px;}
+  .rolebadge{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .rolebadge.admin{background:var(--blue-tint);color:var(--blue-deep);}
+  .rolebadge.site{background:var(--olive-tint);color:var(--olive);}
   .gearbtn{border:1px solid var(--line-strong);background:var(--card);border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:14px;flex-shrink:0;}
   .gearbtn:hover{border-color:var(--ink);}
+  .badge-dot{position:absolute;top:-5px;right:-5px;background:var(--bar-red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px;line-height:1;}
   .catalogpill{margin:0 2px;padding:8px 10px;border-radius:5px;background:var(--card);border:1px solid var(--line);font-size:11.5px;color:var(--ink-soft);line-height:1.5;}
   .catalogpill.warn{background:var(--red-tint);border-color:var(--red);color:var(--red);}
   .catalogpill.ok{background:var(--olive-tint);border-color:var(--olive);color:var(--olive);}
@@ -43,13 +50,15 @@
   .newsite input:focus{outline:none;border-color:var(--orange);}
   .newsite button{border:1px solid var(--ink);background:var(--ink);color:var(--paper);border-radius:4px;padding:0 12px;font-size:16px;cursor:pointer;font-family:'Space Grotesk',sans-serif;}
   .newsite button:hover{background:#000;}
+  .railtitle{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:600;padding:0 8px;margin-top:4px;}
   .sitelist{display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1;}
-  .sitetag{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 10px 14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:0 5px 5px 0;cursor:pointer;transition:border-color .1s;}
-  .sitetag:hover{border-left-color:var(--orange);}
-  .sitetag.active{border-left-color:var(--orange);background:var(--orange-tint);border-color:var(--orange);}
+  .sitetag{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 10px 14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:0 5px 5px 0;cursor:pointer;transition:border-color .1s,background .1s;}
+  .sitetag:hover{border-left-color:var(--blue);}
+  .sitetag.active{border-left-color:var(--blue);background:var(--blue);border-color:var(--blue);}
+  .sitetag.active .name{color:#fff;}
   .sitetag .name{font-weight:500;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .sitetag .cnt{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);flex-shrink:0;}
-  .sitetag.active .cnt{color:var(--orange-deep);}
+  .sitetag.active .cnt{color:#fff;opacity:.85;}
   .sitetag .del{opacity:0;position:absolute;right:-2px;top:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   .sitetag:hover .del{opacity:1;}
   .empty-rail{padding:14px;font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
@@ -65,8 +74,10 @@
   .addbtn{background:var(--ink);color:var(--paper);border:none;border-radius:4px;padding:9px 16px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;}
   .addbtn:hover{background:#000;}
   .addbtn:disabled{opacity:.4;cursor:not-allowed;}
-  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--line);}
-  thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line-strong);background:#F5F3EC;}
+  .tablewrap{border-radius:8px;overflow:hidden;border:1px solid var(--line);box-shadow:0 1px 3px rgba(31,36,33,.06);}
+  .tablebar{background:var(--bar-red);color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;padding:11px 16px;letter-spacing:.01em;}
+  table{width:100%;border-collapse:collapse;background:var(--card);}
+  thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line-strong);background:#F7F8FB;}
   tbody td{padding:12px 14px;font-size:13.5px;border-bottom:1px solid var(--line);vertical-align:middle;}
   tbody tr:last-child td{border-bottom:none;}
   tbody tr:hover{background:#FAF9F5;}
@@ -208,8 +219,9 @@
 <div class="app" id="app" style="display:none;">
   <div class="rail">
     <div class="brandrow">
-      <div class="brand">Stock ledger<small>Multi-site inventory</small></div>
+      <div class="brand">Stock ledger<small>Multi-site inventory</small><span class="rolebadge" id="roleBadge"></span></div>
       <div style="display:flex; gap:6px;">
+        <button class="gearbtn" id="alertBtn" title="Low/over stock alerts" style="position:relative;">🔔<span class="badge-dot" id="alertBadge"></span></button>
         <button class="gearbtn" id="reportBtn" title="Daily activity report">▦</button>
         <button class="gearbtn" id="settingsBtn" title="Master data settings">⚙</button>
         <button class="gearbtn" id="logoutBtn" title="Log out">⏻</button>
@@ -221,6 +233,7 @@
       <input type="text" id="newSitePin" placeholder="PIN" style="max-width:66px;">
       <button id="newSiteBtn" title="Add site">+</button>
     </div>
+    <div class="railtitle">All sites</div>
     <div class="sitelist" id="siteList">
       <div class="loading">Loading sites…</div>
     </div>
@@ -234,10 +247,39 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const SITES_KEY = 'inv-sites';
-const CATALOG_KEY = 'inv-master-catalog';
-const SOURCE_KEY = 'inv-master-source';
-const ADMIN_PASS_KEY = 'inv-admin-pass';
+/* ============================================================
+   BACKEND CONNECTION
+   Paste your deployed Apps Script Web App URL here (ends in /exec).
+   See Code.gs setup instructions for how to get this.
+   ============================================================ */
+const CONFIG = {
+  API_URL: "https://script.google.com/macros/s/AKfycbxILa2hHeF7pga04tF32tcXZ62lDygqcoumbeNRy_9iAytSjwixcXTMiJFEY35DSlpnbA/exec"
+};
+
+function apiReady(){
+  return CONFIG.API_URL && !CONFIG.API_URL.includes('PASTE_YOUR');
+}
+
+async function apiGet(action, params){
+  params = params || {};
+  const qs = Object.keys(params).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
+  const url = `${CONFIG.API_URL}?action=${encodeURIComponent(action)}${qs ? '&' + qs : ''}`;
+  const res = await fetch(url, { method: 'GET' });
+  const data = await res.json();
+  if(data.error) throw new Error(data.error);
+  return data;
+}
+
+async function apiPost(action, body){
+  const res = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(Object.assign({ action }, body))
+  });
+  const data = await res.json();
+  if(data.error) throw new Error(data.error);
+  return data;
+}
 
 let sites = [];
 let activeSiteId = null;
@@ -434,47 +476,34 @@ function stockStatus(it){
 /* ---------- storage: sites ---------- */
 
 async function loadSites(){
-  try{
-    const res = await window.storage.get(SITES_KEY, true);
-    sites = res ? JSON.parse(res.value) : [];
-  }catch(e){
-    sites = [];
-  }
+  // sites are populated by apiBootstrap() at startup; kept as a no-op
+  // wrapper so any existing call site still works.
+  return sites;
 }
-
 async function saveSites(){
-  try{
-    await window.storage.set(SITES_KEY, JSON.stringify(sites), true);
-  }catch(e){
-    toast('Could not save — try again');
-  }
+  // no-op: site rows are created/removed via addSite()/deleteSite()
+  // directly against the sheet instead of a full resync.
 }
 
 async function loadAdminPass(){
-  try{
-    const res = await window.storage.get(ADMIN_PASS_KEY, true);
-    adminPass = res ? res.value : null;
-  }catch(e){
-    adminPass = null;
-  }
+  // populated by apiBootstrap()
 }
-
 async function saveAdminPass(pass){
-  adminPass = pass;
   try{
-    await window.storage.set(ADMIN_PASS_KEY, pass, true);
+    await apiPost('setAdminPass', { pass });
+    adminPass = pass;
   }catch(e){
-    toast('Could not save admin password');
+    toast('⚠ ' + e.message);
+    throw e;
   }
 }
 
 async function loadItems(siteId){
   if(itemsCache[siteId]) return itemsCache[siteId];
   try{
-    const res = await window.storage.get('inv-items:' + siteId, true);
-    const items = res ? JSON.parse(res.value) : [];
-    itemsCache[siteId] = items;
-    return items;
+    const data = await apiGet('items', { siteId });
+    itemsCache[siteId] = data.items || [];
+    return itemsCache[siteId];
   }catch(e){
     itemsCache[siteId] = [];
     return [];
@@ -484,9 +513,9 @@ async function loadItems(siteId){
 async function saveItems(siteId, items){
   itemsCache[siteId] = items;
   try{
-    await window.storage.set('inv-items:' + siteId, JSON.stringify(items), true);
+    await apiPost('saveItems', { siteId, items });
   }catch(e){
-    toast('Could not save — try again');
+    toast('⚠ Could not sync to server — will retry');
   }
 }
 
@@ -495,10 +524,9 @@ let logCache = {};
 async function loadLog(siteId){
   if(logCache[siteId]) return logCache[siteId];
   try{
-    const res = await window.storage.get('inv-log:' + siteId, true);
-    const log = res ? JSON.parse(res.value) : [];
-    logCache[siteId] = log;
-    return log;
+    const data = await apiGet('log', { siteId });
+    logCache[siteId] = data.log || [];
+    return logCache[siteId];
   }catch(e){
     logCache[siteId] = [];
     return [];
@@ -508,33 +536,39 @@ async function loadLog(siteId){
 async function saveLog(siteId, log){
   logCache[siteId] = log;
   try{
-    await window.storage.set('inv-log:' + siteId, JSON.stringify(log), true);
+    await apiPost('saveLog', { siteId, log });
   }catch(e){
     toast('Could not save history');
   }
 }
 
+/* ---------- single call that loads sites, catalog, admin-pass-flag,
+   and every site's items + log in ONE round trip to the sheet ---------- */
+async function apiBootstrap(){
+  const data = await apiGet('bootstrap');
+  sites = data.sites || [];
+  catalog = data.catalog || [];
+  sourceMeta = data.sourceMeta || { url: '', lastSynced: null };
+  adminPass = data.adminPass || null;
+  itemsCache = data.itemsBySite || {};
+  logCache = data.logBySite || {};
+  alertItems = data.alertItems || [];
+}
+
 /* ---------- storage: master catalog ---------- */
 
 async function loadCatalogFromStorage(){
-  try{
-    const res = await window.storage.get(CATALOG_KEY, true);
-    catalog = res ? JSON.parse(res.value) : [];
-  }catch(e){ catalog = []; }
-  try{
-    const res2 = await window.storage.get(SOURCE_KEY, true);
-    sourceMeta = res2 ? JSON.parse(res2.value) : { url: '', lastSynced: null };
-  }catch(e){ sourceMeta = { url: '', lastSynced: null }; }
+  // populated by apiBootstrap()
 }
 
 async function saveCatalog(newCatalog){
   catalog = newCatalog;
-  try{ await window.storage.set(CATALOG_KEY, JSON.stringify(catalog), true); }
+  try{ await apiPost('saveCatalog', { rows: catalog }); }
   catch(e){ toast('Could not save catalog'); }
 }
 
 async function saveSourceMeta(){
-  try{ await window.storage.set(SOURCE_KEY, JSON.stringify(sourceMeta), true); }
+  try{ await apiPost('saveSourceMeta', { url: sourceMeta.url || '', lastSynced: sourceMeta.lastSynced }); }
   catch(e){}
 }
 
@@ -542,11 +576,10 @@ function renderCatalogPill(){
   const pill = document.getElementById('catalogPill');
   if(catalog.length === 0){
     pill.className = 'catalogpill warn';
-    pill.innerHTML = 'No master data loaded yet. Click <b>⚙</b> above to connect your sheet or paste data.';
+    pill.innerHTML = 'No items found in Material_Master. Check the sheet has rows, or click <b>⚙</b> to refresh.';
   } else {
-    const when = sourceMeta.lastSynced ? new Date(sourceMeta.lastSynced).toLocaleString() : 'manually';
     pill.className = 'catalogpill ok';
-    pill.innerHTML = `<b>${catalog.length}</b> SKUs loaded<br>Synced ${escapeHtml(when)}`;
+    pill.innerHTML = `<b>${catalog.length}</b> SKUs synced live from Material_Master`;
   }
 }
 
@@ -629,90 +662,40 @@ async function fetchCatalogFromUrl(url){
 function openSettingsModal(){
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
+  const withLimits = catalog.filter(c => c.min !== null && c.min !== undefined || c.max !== null && c.max !== undefined).length;
   overlay.innerHTML = `
     <div class="modal wide">
-      <h3>Master data source</h3>
-      <p class="modalsub">This catalog (SKU, Category, Material, Size, Unit, HSN, GST) is shared across all sites.</p>
-      <div class="tabs">
-        <button class="tabbtn active" data-tab="url">Fetch from URL</button>
-        <button class="tabbtn" data-tab="paste">Paste CSV</button>
+      <h3>Master item data</h3>
+      <p class="modalsub">This catalog is read live from your Material_Master Google Sheet — add a row or edit Min/Max there and it shows up here automatically, no import needed.</p>
+      <div class="readonlybox" style="grid-template-columns:1fr 1fr 1fr;">
+        <div><span>SKUs loaded</span><b>${catalog.length}</b></div>
+        <div><span>With Min/Max set</span><b>${withLimits}</b></div>
+        <div><span>Last refreshed</span><b>${sourceMeta.lastSynced ? new Date(sourceMeta.lastSynced).toLocaleTimeString() : '—'}</b></div>
       </div>
-      <div id="tabUrl">
-        <div class="field">
-          <label>Published CSV / JSON URL</label>
-          <input type="text" id="f_url" placeholder="https://..." value="${escapeHtml(sourceMeta.url||'')}">
-        </div>
-        <p class="hint">Works with a Google Sheet published as CSV, or a JSON/CSV file hosted anywhere with CORS enabled (Apps Script web app, GitHub Pages, your own server, etc).</p>
-        <div class="syncrow">
-          <span>${sourceMeta.lastSynced ? 'Last synced: ' + escapeHtml(new Date(sourceMeta.lastSynced).toLocaleString()) : 'Not synced yet'}</span>
-        </div>
-        <div class="modalbtns">
-          <button class="btn" id="closeBtn1">Close</button>
-          <button class="btn primary" id="fetchBtn">Fetch now</button>
-        </div>
-      </div>
-      <div id="tabPaste" style="display:none;">
-        <div class="field">
-          <label>Paste CSV data (with header row)</label>
-          <textarea id="f_paste" placeholder="Sr,Category,Material,Size / Grade,Unit,HSN Code,GST %&#10;SKU-1,Steel / Reinforcement,TMT Bar,8mm,Pcs,7214,18"></textarea>
-        </div>
-        <div class="modalbtns">
-          <button class="btn" id="closeBtn2">Close</button>
-          <button class="btn primary" id="loadPasteBtn">Load data</button>
-        </div>
+      <p class="hint">Min/Max come from the "Min" / "Max" columns in Material_Master — they're used as the default reorder levels whenever an item is first added to a site (you can still fine-tune per site afterwards).</p>
+      <div class="modalbtns">
+        <button class="btn" id="closeSettings">Close</button>
+        <button class="btn primary" id="refreshCatalogBtn">Refresh now</button>
       </div>
     </div>
   `;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
-
-  overlay.querySelectorAll('.tabbtn').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      overlay.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
-      b.classList.add('active');
-      document.getElementById('tabUrl').style.display = b.dataset.tab === 'url' ? 'block' : 'none';
-      document.getElementById('tabPaste').style.display = b.dataset.tab === 'paste' ? 'block' : 'none';
-    });
-  });
-
-  overlay.querySelector('#closeBtn1').addEventListener('click', ()=>overlay.remove());
-  overlay.querySelector('#closeBtn2').addEventListener('click', ()=>overlay.remove());
-
-  overlay.querySelector('#fetchBtn').addEventListener('click', async ()=>{
-    const url = document.getElementById('f_url').value.trim();
-    if(!url){ toast('Enter a URL first'); return; }
-    const btn = overlay.querySelector('#fetchBtn');
-    btn.disabled = true; btn.textContent = 'Fetching…';
+  overlay.querySelector('#closeSettings').addEventListener('click', ()=>overlay.remove());
+  overlay.querySelector('#refreshCatalogBtn').addEventListener('click', async ()=>{
+    const btn = overlay.querySelector('#refreshCatalogBtn');
+    btn.disabled = true; btn.textContent = 'Refreshing…';
     try{
-      const rows = await fetchCatalogFromUrl(url);
-      if(rows.length === 0){ toast('No rows found at that URL'); btn.disabled=false; btn.textContent='Fetch now'; return; }
-      await saveCatalog(rows);
-      sourceMeta = { url, lastSynced: Date.now() };
-      await saveSourceMeta();
+      const data = await apiGet('bootstrap');
+      catalog = data.catalog || [];
+      sourceMeta = { url: '', lastSynced: Date.now() };
+      updateAlertState(data.alertCount || 0, data.alertItems || []);
       renderCatalogPill();
       overlay.remove();
-      toast(`Loaded ${rows.length} SKUs from source`);
-    }catch(err){
-      toast('Fetch failed — check the URL and CORS settings');
-      btn.disabled = false; btn.textContent = 'Fetch now';
-    }
-  });
-
-  overlay.querySelector('#loadPasteBtn').addEventListener('click', async ()=>{
-    const text = document.getElementById('f_paste').value.trim();
-    if(!text){ toast('Paste some CSV data first'); return; }
-    try{
-      const rawRows = parseCSV(text);
-      const rows = normalizeRows(rawRows);
-      if(rows.length === 0){ toast('Could not read any rows from that text'); return; }
-      await saveCatalog(rows);
-      sourceMeta = { url: sourceMeta.url || '', lastSynced: Date.now() };
-      await saveSourceMeta();
-      renderCatalogPill();
-      overlay.remove();
-      toast(`Loaded ${rows.length} SKUs`);
-    }catch(err){
-      toast('Could not parse that data');
+      toast(`Refreshed — ${catalog.length} SKUs`);
+    }catch(e){
+      toast('⚠ ' + e.message);
+      btn.disabled = false; btn.textContent = 'Refresh now';
     }
   });
 }
@@ -765,16 +748,17 @@ async function deleteSite(id){
   const site = sites.find(s=>s.id===id);
   if(!confirm(`Delete "${site.name}" and all its stock records? This can't be undone.`)) return;
   sites = sites.filter(s=>s.id!==id);
-  await saveSites();
-  try{ await window.storage.delete('inv-items:' + id, true); }catch(e){}
-  try{ await window.storage.delete('inv-log:' + id, true); }catch(e){}
   delete itemsCache[id];
+  delete logCache[id];
   if(activeSiteId === id){
     activeSiteId = null;
     document.getElementById('main').innerHTML = '<div class="main-empty">Add a site on the left to start tracking stock, or select one from the list.</div>';
   }
   renderSiteList();
+  refreshAlertBadge();
   toast('Site deleted');
+  try{ await apiPost('deleteSite', { siteId: id }); }
+  catch(e){ toast('⚠ Could not sync deletion to server — will retry'); }
 }
 
 document.getElementById('newSiteBtn').addEventListener('click', addSite);
@@ -789,16 +773,24 @@ async function addSite(){
   if(!name){ toast('Enter a site code'); return; }
   if(!pin || pin.length < 4){ toast('Set a PIN (at least 4 digits) for this site'); return; }
   if(sites.some(s=>s.name.toLowerCase() === name.toLowerCase())){ toast('A site with this code already exists'); return; }
-  const site = { id: uid(), name, pin, createdAt: Date.now() };
-  sites.push(site);
-  itemsCache[site.id] = [];
-  input.value = '';
-  pinInput.value = '';
-  await saveSites();
-  await saveItems(site.id, []);
-  renderSiteList();
-  selectSite(site.id);
-  toast('Site added — share the PIN with that site\u2019s team');
+  const addBtn = document.getElementById('newSiteBtn');
+  addBtn.disabled = true;
+  try{
+    const res = await apiPost('addSite', { name, pin });
+    const site = res.site;
+    sites.push(site);
+    itemsCache[site.id] = [];
+    logCache[site.id] = [];
+    input.value = '';
+    pinInput.value = '';
+    renderSiteList();
+    selectSite(site.id);
+    toast('Site added — share the PIN with that site\u2019s team');
+  }catch(e){
+    toast('⚠ ' + e.message);
+  }finally{
+    addBtn.disabled = false;
+  }
 }
 
 /* ---------- main / items table ---------- */
@@ -834,20 +826,23 @@ function renderMain(){
       <button class="btn" id="historyBtn">History</button>
       <button class="addbtn" id="movementBtn" ${catalog.length===0?'disabled title="Load master data first"':''}>+ Record IN / OUT</button>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th class="rownum">#</th>
-          <th>SKU</th>
-          <th>Item</th>
-          <th>Category</th>
-          <th>Quantity</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="itemsBody"></tbody>
-    </table>
+    <div class="tablewrap">
+      <div class="tablebar">${escapeHtml(site.name)} — Stock ledger</div>
+      <table>
+        <thead>
+          <tr>
+            <th class="rownum">#</th>
+            <th>SKU</th>
+            <th>Item</th>
+            <th>Category</th>
+            <th>Quantity</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="itemsBody"></tbody>
+      </table>
+    </div>
   `;
 
   const body = document.getElementById('itemsBody');
@@ -1010,6 +1005,13 @@ function openItemModal(itemId){
         saveBtn.textContent = 'Update quantity';
       } else {
         saveBtn.textContent = existing ? 'Save changes' : 'Add item';
+        // brand-new item at this site: prefill Min/Max from the catalog's
+        // master defaults (admin can still adjust before saving)
+        if(!existing){
+          const fMin = document.getElementById('f_min'), fMax = document.getElementById('f_max');
+          if(!fMin.value && (selectedRow.min !== null && selectedRow.min !== undefined)) fMin.value = selectedRow.min;
+          if(!fMax.value && (selectedRow.max !== null && selectedRow.max !== undefined)) fMax.value = selectedRow.max;
+        }
       }
     } else {
       skuBox.style.display = 'none';
@@ -1035,7 +1037,7 @@ function openItemModal(itemId){
 
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
   document.getElementById('cancelBtn').addEventListener('click', ()=>overlay.remove());
-  saveBtn.addEventListener('click', async ()=>{
+  saveBtn.addEventListener('click', ()=>{
     if(!selectedRow) return;
     const qty = Number(document.getElementById('f_qty').value) || 0;
     const minVal = document.getElementById('f_min').value;
@@ -1052,30 +1054,40 @@ function openItemModal(itemId){
     } else {
       list = [...list, { id: uid(), sku:selectedRow.sku, category:selectedRow.category, material:selectedRow.material, size:selectedRow.size, unit:selectedRow.unit, hsn:selectedRow.hsn, gst:selectedRow.gst, qty, min, max, addedAt: Date.now() }];
     }
-    await saveItems(activeSiteId, list);
+    itemsCache[activeSiteId] = list;
     overlay.remove();
     renderSiteList();
     renderMain();
+    refreshAlertBadge();
     toast(dupe ? 'Quantity updated' : (existing ? 'Item updated' : 'Item added'));
+    saveItems(activeSiteId, list).catch(()=>toast('⚠ Could not sync to server — will retry'));
   });
 }
 
-async function deleteItem(itemId){
+function deleteItem(itemId){
   let items = itemsCache[activeSiteId] || [];
   items = items.filter(i => i.id !== itemId);
-  await saveItems(activeSiteId, items);
+  itemsCache[activeSiteId] = items;
   renderSiteList();
   renderMain();
+  refreshAlertBadge();
   toast('Item deleted');
+  saveItems(activeSiteId, items).catch(()=>toast('⚠ Could not sync to server — will retry'));
 }
 
 /* ---------- material IN / OUT movement form ---------- */
 
 /* ---------- shared movement application logic ---------- */
 
-async function applyMovement(siteId, movementType, stagedList){
-  await loadItems(siteId);
-  await loadLog(siteId);
+function persistSiteData(siteId){
+  // fire-and-forget: write-behind so clicks feel instant; UI already reflects the change
+  saveItems(siteId, itemsCache[siteId] || []).catch(()=>toast('⚠ Could not sync to server — will retry'));
+  saveLog(siteId, logCache[siteId] || []).catch(()=>{});
+}
+
+function applyMovement(siteId, movementType, stagedList){
+  // Uses the in-memory cache directly (already loaded) instead of re-fetching from
+  // storage first — that round trip was the main source of click-to-update lag.
   let list = itemsCache[siteId] || [];
   let log = logCache[siteId] || [];
   const now = Date.now();
@@ -1089,15 +1101,17 @@ async function applyMovement(siteId, movementType, stagedList){
       updated = { ...list[idx], qty: (Number(list[idx].qty)||0) + delta };
       list[idx] = updated;
     } else {
-      updated = { id: uid(), sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: delta, addedAt: now };
+      const cat = catalog.find(c => c.sku === s.sku);
+      updated = { id: uid(), sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: delta, min: cat && cat.min != null ? cat.min : null, max: cat && cat.max != null ? cat.max : null, addedAt: now };
       list.push(updated);
     }
     const st = stockStatus(updated);
     if(st.label === 'Low' || st.label === 'Over') breached.push(`${s.material} (${st.label})`);
     log.push({ id: uid(), type: movementType, sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: s.qty, by: actor, at: now });
   }
-  await saveItems(siteId, list);
-  await saveLog(siteId, log);
+  itemsCache[siteId] = list;
+  logCache[siteId] = log;
+  persistSiteData(siteId);
   return { breached };
 }
 
@@ -1132,15 +1146,14 @@ function openQuickMoveModal(item, defaultType){
   setTimeout(()=>qtyInput.focus(), 50);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
   document.getElementById('q_cancel').addEventListener('click', ()=>overlay.remove());
-  document.getElementById('q_submit').addEventListener('click', async ()=>{
+  document.getElementById('q_submit').addEventListener('click', ()=>{
     const qty = Number(qtyInput.value);
     if(!qty || qty <= 0){ toast('Enter a quantity'); return; }
-    const submitBtn = document.getElementById('q_submit');
-    submitBtn.disabled = true; submitBtn.textContent = 'Saving…';
-    const { breached } = await applyMovement(activeSiteId, type, [{ sku:item.sku, category:item.category, material:item.material, size:item.size, unit:item.unit, qty }]);
+    const { breached } = applyMovement(activeSiteId, type, [{ sku:item.sku, category:item.category, material:item.material, size:item.size, unit:item.unit, qty }]);
     overlay.remove();
     renderSiteList();
     renderMain();
+    refreshAlertBadge();
     toast(breached.length > 0 ? `Saved. ⚠ ${item.material} is now ${breached[0].split('(')[1].replace(')','')}` : `${type === 'IN' ? 'Received' : 'Issued'} ${qty} ${item.unit||''}`);
   });
 }
@@ -1291,10 +1304,9 @@ function openMovementModal(){
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
   document.getElementById('m_cancel').addEventListener('click', ()=>overlay.remove());
 
-  submitBtn.addEventListener('click', async ()=>{
+  submitBtn.addEventListener('click', ()=>{
     if(staged.length === 0) return;
-    submitBtn.disabled = true; submitBtn.textContent = 'Saving…';
-    const { breached } = await applyMovement(targetSiteId, movementType, staged);
+    const { breached } = applyMovement(targetSiteId, movementType, staged);
     overlay.remove();
     if(targetSiteId !== activeSiteId){
       selectSite(targetSiteId);
@@ -1302,6 +1314,7 @@ function openMovementModal(){
       renderSiteList();
       renderMain();
     }
+    refreshAlertBadge();
     if(breached.length > 0){
       toast(`Saved. ⚠ Out of range: ${breached.slice(0,3).join(', ')}${breached.length>3?` +${breached.length-3} more`:''}`);
     } else {
@@ -1503,25 +1516,82 @@ function applyRoleVisibility(){
   const isAdmin = currentUser && currentUser.role === 'admin';
   document.getElementById('settingsBtn').style.display = isAdmin ? '' : 'none';
   document.getElementById('reportBtn').style.display = isAdmin ? '' : 'none';
+  document.getElementById('alertBtn').style.display = isAdmin ? '' : 'none';
   document.getElementById('newsiteRow').style.display = isAdmin ? '' : 'none';
+  updateAlertState(null, alertItems);
+  const badge = document.getElementById('roleBadge');
+  if(badge){
+    badge.textContent = isAdmin ? 'Admin' : 'Site login';
+    badge.className = 'rolebadge ' + (isAdmin ? 'admin' : 'site');
+  }
 }
+
+/* ---------- low/over stock alerts (admin notification) ---------- */
+
+function computeAlerts(){
+  const out = [];
+  Object.keys(itemsCache).forEach(siteId => {
+    const site = sites.find(s=>s.id===siteId);
+    (itemsCache[siteId]||[]).forEach(it => {
+      const st = stockStatus(it);
+      if(st.label === 'Low' || st.label === 'Over'){
+        out.push({ siteId, siteName: site ? site.name : 'Unknown site', material: it.material, sku: it.sku, qty: it.qty, min: it.min, max: it.max, status: st.label });
+      }
+    });
+  });
+  return out;
+}
+
+let alertItems = [];
+function updateAlertState(count, items){
+  alertItems = items || computeAlerts();
+  const badge = document.getElementById('alertBadge');
+  if(!badge) return;
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  if(!isAdmin || alertItems.length === 0){
+    badge.style.display = 'none';
+  } else {
+    badge.style.display = 'flex';
+    badge.textContent = alertItems.length > 99 ? '99+' : String(alertItems.length);
+  }
+}
+function refreshAlertBadge(){ updateAlertState(null, computeAlerts()); }
+
+function openAlertsModal(){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  const list = computeAlerts();
+  overlay.innerHTML = `
+    <div class="modal wide">
+      <h3>Stock alerts</h3>
+      <p class="modalsub">${list.length===0 ? 'Nothing out of range right now.' : `${list.length} item${list.length===1?'':'s'} below Min or above Max, across all sites.`}</p>
+      <div style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+        ${list.map(a => `
+          <div class="logrow" style="border-bottom:1px solid var(--line);">
+            <span class="statuschip ${a.status==='Low'?'stat-red':'stat-red'}"><span class="dot"></span>${a.status}</span>
+            <div style="flex:1;">
+              <div style="font-weight:500;">${escapeHtml(a.material)} <span style="color:var(--ink-soft);font-weight:400;">· ${escapeHtml(a.siteName)}</span></div>
+              <div style="font-size:11.5px;color:var(--ink-soft);">${escapeHtml(a.sku||'')} — currently ${a.qty}, ${a.status==='Low' ? 'min '+a.min : 'max '+a.max}</div>
+            </div>
+          </div>
+        `).join('') || ''}
+      </div>
+      <div class="modalbtns">
+        <button class="btn primary" id="closeAlerts">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+  overlay.querySelector('#closeAlerts').addEventListener('click', ()=>overlay.remove());
+}
+document.getElementById('alertBtn').addEventListener('click', openAlertsModal);
 
 async function startApp(){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   applyRoleVisibility();
 
-  await loadCatalogFromStorage();
-  if(catalog.length === 0){
-    try{
-      const rows = normalizeRows(parseCSV(SEED_CATALOG_TSV, '\t'));
-      if(rows.length > 0){
-        await saveCatalog(rows);
-        sourceMeta = { url: '', lastSynced: Date.now() };
-        await saveSourceMeta();
-      }
-    }catch(e){}
-  }
   renderCatalogPill();
   renderSiteList();
   const visibleSites = currentUser.role === 'site' ? sites.filter(s=>s.id===currentUser.siteId) : sites;
@@ -1587,7 +1657,7 @@ document.getElementById('loginSiteBtn').addEventListener('click', async ()=>{
   const site = sites.find(s=>s.id===siteId);
   if(!site){ hint.textContent = 'Pick a site first.'; return; }
   if(!pin){ hint.textContent = 'Enter the PIN for this site.'; return; }
-  if(site.pin !== pin){ hint.textContent = 'Wrong PIN — check with your admin.'; return; }
+  if(String(site.pin) !== String(pin)){ hint.textContent = 'Wrong PIN — check with your admin.'; return; }
   currentUser = { role: 'site', siteId, actorName: name };
   await startApp();
 });
@@ -1603,7 +1673,7 @@ document.getElementById('loginAdminBtn').addEventListener('click', async ()=>{
     currentUser = { role: 'admin', actorName: name };
     await startApp();
   } else {
-    if(val !== adminPass){ hint.textContent = 'Wrong password.'; return; }
+    if(String(val) !== String(adminPass)){ hint.textContent = 'Wrong password.'; return; }
     currentUser = { role: 'admin', actorName: name };
     await startApp();
   }
@@ -1617,10 +1687,26 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>{
 /* ---------- init ---------- */
 
 (async function init(){
-  await loadSites();
-  await loadAdminPass();
-  for(const s of sites){
-    await loadItems(s.id);
+  if(!apiReady()){
+    document.body.innerHTML = `<div style="max-width:520px;margin:80px auto;padding:24px;font-family:sans-serif;line-height:1.6;">
+      <h2>Backend not connected yet</h2>
+      <p>This app needs a Google Apps Script Web App URL to talk to your Google Sheet.</p>
+      <p>Open <code>Code.gs</code>, follow the setup steps, deploy it, then paste the
+      <code>/exec</code> URL into <code>CONFIG.API_URL</code> near the top of this file's
+      <code>&lt;script&gt;</code> tag.</p>
+    </div>`;
+    return;
+  }
+  try{
+    await apiBootstrap();
+  }catch(e){
+    document.body.innerHTML = `<div style="max-width:520px;margin:80px auto;padding:24px;font-family:sans-serif;line-height:1.6;">
+      <h2>Could not reach the sheet backend</h2>
+      <p>${escapeHtml(e.message || 'Unknown error')}</p>
+      <p>Check that CONFIG.API_URL is correct and the Apps Script is deployed with
+      "Who has access: Anyone".</p>
+    </div>`;
+    return;
   }
   showLogin();
 })();
