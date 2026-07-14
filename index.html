@@ -248,6 +248,21 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyChhKLo7Wj6Uuzb_Vw5OQACamkOD8XqDOQ",
+  authDomain: "inventory-7858d.firebaseapp.com",
+  databaseURL: "https://inventory-7858d-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "inventory-7858d",
+  storageBucket: "inventory-7858d.firebasestorage.app",
+  messagingSenderId: "1010639194290",
+  appId: "1:1010639194290:web:c8ce553e0a1102eedd21ab"
+};
+firebase.initializeApp(firebaseConfig);
+const rtdb = firebase.database();
+</script>
 <script>
 /* ============================================================
    BACKEND CONNECTION
@@ -255,7 +270,7 @@
    See Code.gs setup instructions for how to get this.
    ============================================================ */
 const CONFIG = {
-  API_URL: "https://script.google.com/macros/s/AKfycbxILa2hHeF7pga04tF32tcXZ62lDygqcoumbeNRy_9iAytSjwixcXTMiJFEY35DSlpnbA/exec"
+  API_URL: "https://script.google.com/macros/s/AKfycbz54UtCj1dNyIw7c5ctdU5D9Uimhl8pBNBQL6-Mep2y26ukoKyQOUoMwiKHnLr0LenCQg/exec"
 };
 
 function apiReady(){
@@ -477,6 +492,20 @@ function stockStatus(it){
 
 /* ---------- storage: sites ---------- */
 
+function objFromArray(arr){
+  const out = {};
+  (arr||[]).forEach(it => {
+    const id = it.id || uid();
+    const copy = Object.assign({}, it);
+    delete copy.id;
+    out[id] = copy;
+  });
+  return out;
+}
+function arrFromObj(obj){
+  return Object.keys(obj||{}).map(id => Object.assign({id}, obj[id]));
+}
+
 async function loadSites(){
   // sites are populated by apiBootstrap() at startup; kept as a no-op
   // wrapper so any existing call site still works.
@@ -484,7 +513,7 @@ async function loadSites(){
 }
 async function saveSites(){
   // no-op: site rows are created/removed via addSite()/deleteSite()
-  // directly against the sheet instead of a full resync.
+  // directly against Firebase instead of a full resync.
 }
 
 async function loadAdminPass(){
@@ -492,7 +521,7 @@ async function loadAdminPass(){
 }
 async function saveAdminPass(pass){
   try{
-    await apiPost('setAdminPass', { pass });
+    await rtdb.ref('config/adminPass').set(pass);
     adminPass = pass;
   }catch(e){
     toast('⚠ ' + e.message);
@@ -503,8 +532,8 @@ async function saveAdminPass(pass){
 async function loadItems(siteId){
   if(itemsCache[siteId]) return itemsCache[siteId];
   try{
-    const data = await apiGet('items', { siteId });
-    itemsCache[siteId] = data.items || [];
+    const snap = await rtdb.ref('items/' + siteId).once('value');
+    itemsCache[siteId] = arrFromObj(snap.val());
     return itemsCache[siteId];
   }catch(e){
     itemsCache[siteId] = [];
@@ -515,7 +544,7 @@ async function loadItems(siteId){
 async function saveItems(siteId, items){
   itemsCache[siteId] = items;
   try{
-    await apiPost('saveItems', { siteId, items });
+    await rtdb.ref('items/' + siteId).set(objFromArray(items));
   }catch(e){
     toast('⚠ Could not sync to server — will retry');
   }
@@ -526,8 +555,8 @@ let logCache = {};
 async function loadLog(siteId){
   if(logCache[siteId]) return logCache[siteId];
   try{
-    const data = await apiGet('log', { siteId });
-    logCache[siteId] = data.log || [];
+    const snap = await rtdb.ref('log/' + siteId).once('value');
+    logCache[siteId] = arrFromObj(snap.val());
     return logCache[siteId];
   }catch(e){
     logCache[siteId] = [];
@@ -538,40 +567,44 @@ async function loadLog(siteId){
 async function saveLog(siteId, log){
   logCache[siteId] = log;
   try{
-    await apiPost('saveLog', { siteId, log });
+    await rtdb.ref('log/' + siteId).set(objFromArray(log));
   }catch(e){
     toast('Could not save history');
   }
 }
 
-/* ---------- single call that loads sites, catalog, admin-pass-flag,
-   and every site's items + log in ONE round trip to the sheet ---------- */
+/* ---------- one-shot load of sites + items + log (Firebase, fast)
+   plus the live catalog (still read from the Material_Master Google
+   Sheet through the lightweight Apps Script endpoint) ---------- */
 async function apiBootstrap(){
-  const data = await apiGet('bootstrap');
-  sites = data.sites || [];
-  catalog = data.catalog || [];
-  sourceMeta = data.sourceMeta || { url: '', lastSynced: null };
-  adminPass = data.adminPass || null;
-  itemsCache = data.itemsBySite || {};
-  logCache = data.logBySite || {};
-  alertItems = data.alertItems || [];
+  const [sitesSnap, itemsSnap, logSnap, adminPassSnap, catalogData] = await Promise.all([
+    rtdb.ref('sites').once('value'),
+    rtdb.ref('items').once('value'),
+    rtdb.ref('log').once('value'),
+    rtdb.ref('config/adminPass').once('value'),
+    apiGet('catalog').catch(() => ({ catalog: [] }))
+  ]);
+
+  sites = arrFromObj(sitesSnap.val());
+  adminPass = adminPassSnap.val() || null;
+
+  itemsCache = {};
+  const itemsVal = itemsSnap.val() || {};
+  Object.keys(itemsVal).forEach(siteId => { itemsCache[siteId] = arrFromObj(itemsVal[siteId]); });
+
+  logCache = {};
+  const logVal = logSnap.val() || {};
+  Object.keys(logVal).forEach(siteId => { logCache[siteId] = arrFromObj(logVal[siteId]); });
+
+  catalog = catalogData.catalog || [];
+  sourceMeta = { url: '', lastSynced: Date.now() };
+  alertItems = computeAlerts();
 }
 
 /* ---------- storage: master catalog ---------- */
 
 async function loadCatalogFromStorage(){
   // populated by apiBootstrap()
-}
-
-async function saveCatalog(newCatalog){
-  catalog = newCatalog;
-  try{ await apiPost('saveCatalog', { rows: catalog }); }
-  catch(e){ toast('Could not save catalog'); }
-}
-
-async function saveSourceMeta(){
-  try{ await apiPost('saveSourceMeta', { url: sourceMeta.url || '', lastSynced: sourceMeta.lastSynced }); }
-  catch(e){}
 }
 
 function renderCatalogPill(){
@@ -688,10 +721,9 @@ function openSettingsModal(){
     const btn = overlay.querySelector('#refreshCatalogBtn');
     btn.disabled = true; btn.textContent = 'Refreshing…';
     try{
-      const data = await apiGet('bootstrap');
+      const data = await apiGet('catalog');
       catalog = data.catalog || [];
       sourceMeta = { url: '', lastSynced: Date.now() };
-      updateAlertState(data.alertCount || 0, data.alertItems || []);
       renderCatalogPill();
       overlay.remove();
       toast(`Refreshed — ${catalog.length} SKUs`);
@@ -759,8 +791,13 @@ async function deleteSite(id){
   renderSiteList();
   refreshAlertBadge();
   toast('Site deleted');
-  try{ await apiPost('deleteSite', { siteId: id }); }
-  catch(e){ toast('⚠ Could not sync deletion to server — will retry'); }
+  try{
+    await Promise.all([
+      rtdb.ref('sites/' + id).remove(),
+      rtdb.ref('items/' + id).remove(),
+      rtdb.ref('log/' + id).remove()
+    ]);
+  }catch(e){ toast('⚠ Could not sync deletion to server — will retry'); }
 }
 
 document.getElementById('newSiteBtn').addEventListener('click', addSite);
@@ -782,8 +819,10 @@ async function addSite(){
   const addBtn = document.getElementById('newSiteBtn');
   addBtn.disabled = true;
   try{
-    const res = await apiPost('addSite', { name, pin, assignedName });
-    const site = res.site;
+    const ref = rtdb.ref('sites').push();
+    const site = { id: ref.key, name, pin, assignedName, createdAt: Date.now() };
+    const toSave = Object.assign({}, site); delete toSave.id;
+    await ref.set(toSave);
     sites.push(site);
     itemsCache[site.id] = [];
     logCache[site.id] = [];
@@ -1100,6 +1139,7 @@ function applyMovement(siteId, movementType, stagedList){
   const now = Date.now();
   const actor = (currentUser && currentUser.actorName) || 'Unknown';
   const breached = [];
+  const logEntries = [];
   for(const s of stagedList){
     const idx = list.findIndex(i => i.sku === s.sku);
     const delta = movementType === 'IN' ? s.qty : -s.qty;
@@ -1114,12 +1154,66 @@ function applyMovement(siteId, movementType, stagedList){
     }
     const st = stockStatus(updated);
     if(st.label === 'Low' || st.label === 'Over') breached.push(`${s.material} (${st.label})`);
-    log.push({ id: uid(), type: movementType, sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: s.qty, by: actor, at: now });
+    const entry = { id: uid(), type: movementType, sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: s.qty, by: actor, at: now };
+    log.push(entry);
+    logEntries.push(entry);
   }
   itemsCache[siteId] = list;
   logCache[siteId] = log;
-  persistSiteData(siteId);
+  persistMovement(siteId, stagedList, movementType, logEntries);
   return { breached };
+}
+
+// Runs in the background after applyMovement already updated the UI.
+// Each item's qty is applied as an atomic Firebase transaction (read
+// current value, add delta, write back) so two people recording
+// movements on the same item at the same moment can never silently
+// overwrite each other — this is the concurrency-safety fix.
+async function persistMovement(siteId, stagedList, movementType, logEntries){
+  try{
+    const updates = {};
+    logEntries.forEach(e => {
+      const key = rtdb.ref('log/' + siteId).push().key;
+      const copy = Object.assign({}, e); delete copy.id;
+      updates['log/' + siteId + '/' + key] = copy;
+    });
+    await rtdb.ref().update(updates);
+  }catch(e){ toast('⚠ Could not sync history to server'); }
+
+  for(const s of stagedList){
+    const delta = movementType === 'IN' ? s.qty : -s.qty;
+    const localItem = (itemsCache[siteId] || []).find(i => i.sku === s.sku);
+    const itemId = localItem ? localItem.id : uid();
+    const cat = catalog.find(c => c.sku === s.sku);
+    let transitioned = false, transitionStatus = '';
+    try{
+      const result = await rtdb.ref('items/' + siteId + '/' + itemId).transaction(current => {
+        if(current === null){
+          const fresh = { sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit,
+            qty: delta, min: cat && cat.min != null ? cat.min : null, max: cat && cat.max != null ? cat.max : null,
+            addedAt: Date.now(), alertState: '' };
+          const status = stockStatus(fresh).label;
+          fresh.alertState = (status === 'Low' || status === 'Over') ? status : '';
+          transitioned = !!fresh.alertState;
+          transitionStatus = fresh.alertState;
+          return fresh;
+        }
+        const prevAlertState = current.alertState || '';
+        const newQty = (Number(current.qty) || 0) + delta;
+        const status = stockStatus({ qty: newQty, min: current.min, max: current.max }).label;
+        const nextAlertState = (status === 'Low' || status === 'Over') ? status : '';
+        transitioned = !!nextAlertState && nextAlertState !== prevAlertState;
+        transitionStatus = nextAlertState;
+        current.qty = newQty;
+        current.alertState = nextAlertState;
+        return current;
+      });
+      if(result.committed && transitioned){
+        const val = result.snapshot.val();
+        apiPost('sendAlertEmail', { alerts: [{ material: val.material, sku: val.sku, qty: val.qty, min: val.min, max: val.max, status: transitionStatus, siteName: (sites.find(x=>x.id===siteId)||{}).name || siteId }] }).catch(()=>{});
+      }
+    }catch(e){ toast('⚠ Could not sync ' + s.material + ' to server'); }
+  }
 }
 
 function openQuickMoveModal(item, defaultType){
