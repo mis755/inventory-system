@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Site Stock Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #ECEAE1;
+    --card: #FFFFFF;
+    --ink: #1F2421;
+    --ink-soft: #5C6360;
+    --line: #D8D5C8;
+    --line-strong: #B9B5A4;
+    --orange: #D65A1F;
+    --orange-deep: #A8420F;
+    --orange-tint: #FBE6D8;
+    --blue: #3B6E8F;
+    --blue-tint: #E1EBF0;
+    --olive: #5C7A3B;
+    --olive-tint: #E9F0DE;
+    --red: #B23A2E;
+    --red-tint: #F6DFDB;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  .app{display:flex;min-height:100vh;}
+  .rail{width:250px;flex-shrink:0;background:var(--paper);border-right:1px solid var(--line-strong);padding:24px 14px;display:flex;flex-direction:column;gap:16px;}
+  .brandrow{display:flex;justify-content:space-between;align-items:flex-start;padding:0 6px;}
+  .brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:-0.01em;}
+  .brand small{display:block;font-family:'Inter',sans-serif;font-weight:500;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.08em;margin-top:2px;}
+  .gearbtn{border:1px solid var(--line-strong);background:var(--card);border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:14px;flex-shrink:0;}
+  .gearbtn:hover{border-color:var(--ink);}
+  .catalogpill{margin:0 2px;padding:8px 10px;border-radius:5px;background:var(--card);border:1px solid var(--line);font-size:11.5px;color:var(--ink-soft);line-height:1.5;}
+  .catalogpill.warn{background:var(--red-tint);border-color:var(--red);color:var(--red);}
+  .catalogpill.ok{background:var(--olive-tint);border-color:var(--olive);color:var(--olive);}
+  .catalogpill b{color:inherit;}
+  .newsite{display:flex;gap:6px;padding:0 2px;}
+  .newsite input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line-strong);border-radius:4px;background:var(--card);font-family:'Inter',sans-serif;font-size:13px;color:var(--ink);}
+  .newsite input:focus{outline:none;border-color:var(--orange);}
+  .newsite button{border:1px solid var(--ink);background:var(--ink);color:var(--paper);border-radius:4px;padding:0 12px;font-size:16px;cursor:pointer;font-family:'Space Grotesk',sans-serif;}
+  .newsite button:hover{background:#000;}
+  .sitelist{display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1;}
+  .sitetag{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 10px 14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:0 5px 5px 0;cursor:pointer;transition:border-color .1s;}
+  .sitetag:hover{border-left-color:var(--orange);}
+  .sitetag.active{border-left-color:var(--orange);background:var(--orange-tint);border-color:var(--orange);}
+  .sitetag .name{font-weight:500;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sitetag .cnt{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);flex-shrink:0;}
+  .sitetag.active .cnt{color:var(--orange-deep);}
+  .sitetag .del{opacity:0;position:absolute;right:-2px;top:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .sitetag:hover .del{opacity:1;}
+  .empty-rail{padding:14px;font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
+  .main{flex:1;padding:32px 40px;min-width:0;}
+  .main-empty{display:flex;align-items:center;justify-content:center;height:70vh;color:var(--ink-soft);font-size:14px;text-align:center;max-width:340px;margin:0 auto;line-height:1.6;}
+  .header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px;gap:16px;flex-wrap:wrap;}
+  .htitle{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;letter-spacing:-0.01em;}
+  .hsub{font-size:12.5px;color:var(--ink-soft);margin-top:4px;font-family:'IBM Plex Mono',monospace;}
+  .toolbar{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
+  .toolbar input, .toolbar select{padding:9px 12px;border:1px solid var(--line-strong);border-radius:4px;background:var(--card);font-family:'Inter',sans-serif;font-size:13px;color:var(--ink);}
+  .toolbar input{flex:1;min-width:180px;}
+  .toolbar input:focus, .toolbar select:focus{outline:none;border-color:var(--orange);}
+  .addbtn{background:var(--ink);color:var(--paper);border:none;border-radius:4px;padding:9px 16px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;}
+  .addbtn:hover{background:#000;}
+  .addbtn:disabled{opacity:.4;cursor:not-allowed;}
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--line);}
+  thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line-strong);background:#F5F3EC;}
+  tbody td{padding:12px 14px;font-size:13.5px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#FAF9F5;}
+  .rownum{font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);font-size:12px;width:34px;}
+  .sku{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);}
+  .itemname{font-weight:500;}
+  .itemname small{display:block;font-weight:400;color:var(--ink-soft);font-size:11.5px;margin-top:1px;}
+  .chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:500;background:var(--blue-tint);color:var(--blue);}
+  .qty{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;}
+  .qty.low{color:var(--red);}
+  .unit{color:var(--ink-soft);font-size:12px;}
+  .rowactions{display:flex;gap:6px;justify-content:flex-end;}
+  .iconbtn{border:1px solid var(--line-strong);background:var(--card);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:13px;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;}
+  .iconbtn:hover{border-color:var(--ink);color:var(--ink);}
+  .iconbtn.danger:hover{border-color:var(--red);color:var(--red);}
+  .tableempty{padding:50px 20px;text-align:center;color:var(--ink-soft);font-size:13.5px;}
+  .overlay{position:fixed;inset:0;background:rgba(20,20,18,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;overflow-y:auto;}
+  .modal{background:var(--card);border-radius:10px;padding:24px;width:100%;max-width:420px;border:1px solid var(--line-strong);margin:auto;}
+  .modal.wide{max-width:560px;}
+  .modal h3{margin:0 0 4px;font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;}
+  .modal .modalsub{font-size:12px;color:var(--ink-soft);margin:0 0 16px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:5px;font-weight:600;}
+  .field input, .field select, .field textarea{width:100%;padding:9px 11px;border:1px solid var(--line-strong);border-radius:4px;font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink);background:var(--paper);}
+  .field textarea{font-family:'IBM Plex Mono',monospace;font-size:11.5px;resize:vertical;min-height:90px;}
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--orange);background:var(--card);}
+  .field input:disabled, .field select:disabled{opacity:.5;cursor:not-allowed;}
+  .readonlybox{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:12.5px;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-bottom:12px;}
+  .readonlybox div span{display:block;color:var(--ink-soft);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;}
+  .readonlybox div b{font-family:'IBM Plex Mono',monospace;font-size:13px;}
+  .modalrow{display:flex;gap:10px;}
+  .modalrow .field{flex:1;}
+  .modalbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+  .btn{padding:9px 16px;border-radius:4px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer;border:1px solid var(--line-strong);background:var(--card);color:var(--ink);}
+  .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .btn.primary:hover{background:#000;}
+  .btn:hover{border-color:var(--ink);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .tabs{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--line-strong);border-radius:5px;overflow:hidden;}
+  .tabs button{flex:1;padding:8px;border:none;background:var(--card);font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer;color:var(--ink-soft);}
+  .tabs button.active{background:var(--ink);color:var(--paper);}
+  .syncrow{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--ink-soft);margin:-4px 0 14px;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80%;text-align:center;}
+  .toast.show{opacity:1;}
+  .loading{padding:40px;text-align:center;color:var(--ink-soft);font-size:13px;}
+  .hint{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin:6px 0 0;}
+  .movetoggle{display:flex;gap:8px;margin-bottom:16px;}
+  .movetoggle button{flex:1;padding:10px;border-radius:5px;border:1px solid var(--line-strong);background:var(--card);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer;color:var(--ink-soft);}
+  .movetoggle button.active-in{border-color:var(--olive);background:var(--olive-tint);color:var(--olive);}
+  .movetoggle button.active-out{border-color:var(--red);background:var(--red-tint);color:var(--red);}
+  .sectionlabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;margin:16px 0 8px;border-top:1px solid var(--line);padding-top:14px;}
+  .stagelist{border:1px dashed var(--line-strong);border-radius:6px;min-height:44px;margin:10px 0 14px;padding:6px;display:flex;flex-direction:column;gap:6px;}
+  .stagelist .empty{padding:10px;text-align:center;color:var(--ink-soft);font-size:12px;}
+  .stagerow{display:flex;justify-content:space-between;align-items:center;background:var(--paper);border-radius:4px;padding:8px 10px;font-size:12.5px;}
+  .stagerow .si{font-weight:500;}
+  .stagerow .si small{display:block;color:var(--ink-soft);font-weight:400;font-size:11px;}
+  .stagerow .sq{font-family:'IBM Plex Mono',monospace;font-weight:600;margin-right:10px;}
+  .stagerow .rm{border:none;background:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px;}
+  .addtolistbtn{width:100%;padding:9px;border-radius:4px;border:1px solid var(--blue);background:var(--blue-tint);color:var(--blue);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;cursor:pointer;}
+  .addtolistbtn:disabled{opacity:.4;cursor:not-allowed;}
+  .logrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+  .logrow:last-child{border-bottom:none;}
+  .logbadge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:3px;letter-spacing:.04em;flex-shrink:0;width:34px;text-align:center;}
+  .logbadge.in{background:var(--olive-tint);color:var(--olive);}
+  .logbadge.out{background:var(--red-tint);color:var(--red);}
+  .logrow .lname{flex:1;font-weight:500;}
+  .logrow .lname small{display:block;color:var(--ink-soft);font-weight:400;}
+  .logrow .lqty{font-family:'IBM Plex Mono',monospace;font-weight:600;}
+  .logrow .ldate{color:var(--ink-soft);font-size:11px;width:110px;text-align:right;flex-shrink:0;}
+  .loginscreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--paper);padding:20px;}
+  .logincard{background:var(--card);border:1px solid var(--line-strong);border-radius:10px;padding:28px;width:100%;max-width:340px;}
+  .sitepin{display:flex;align-items:center;gap:6px;}
+  .sitepin button{border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:13px;padding:2px 4px;flex-shrink:0;}
+  .sitepin button:hover{color:var(--ink);}
+  .statuschip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+  .statuschip.stat-green{background:var(--olive-tint);color:var(--olive);}
+  .statuschip.stat-red{background:var(--red-tint);color:var(--red);}
+  .statuschip.stat-none{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line);}
+  .statuschip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;}
+  .alertbanner{display:flex;align-items:center;gap:8px;background:var(--red-tint);border:1px solid var(--red);color:var(--red);border-radius:6px;padding:10px 14px;font-size:12.5px;font-weight:500;margin-bottom:16px;}
+  .modal.report{max-width:min(94vw, 900px);}
+  .reportwrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px;}
+  .reporttable{border-collapse:collapse;font-size:11.5px;white-space:nowrap;}
+  .reporttable th, .reporttable td{padding:8px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);text-align:center;}
+  .reporttable th{background:#F5F3EC;font-weight:600;color:var(--ink-soft);font-size:10.5px;}
+  .reporttable td.sitecell, .reporttable th.sitecell{text-align:left;position:sticky;left:0;background:var(--card);font-weight:500;z-index:1;}
+  .reporttable th.sitecell{background:#F5F3EC;}
+  .reporttable td.today{background:var(--olive-tint);}
+  .daycell{font-family:'IBM Plex Mono',monospace;font-weight:600;}
+  .daycell.active{color:var(--olive);}
+  .daycell.inactive{color:var(--line-strong);}
+  .daycell.alertcount{color:var(--red);background:var(--red-tint);padding:2px 8px;border-radius:10px;}
+  .reporttable th.subhead{font-size:9.5px;background:var(--paper);color:var(--ink-soft);}
+  .doername{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:9.5px;color:var(--ink-soft);white-space:normal;max-width:80px;margin:2px auto 0;line-height:1.3;}
+  ::placeholder{color:#A8A499;}
+</style>
+</head>
+<body>
+
+<div class="loginscreen" id="loginScreen">
+  <div class="logincard">
+    <div class="brand" style="margin-bottom:2px;">Stock ledger</div>
+    <p class="modalsub" style="margin-bottom:18px;">Multi-site inventory access</p>
+    <div class="tabs">
+      <button class="tabbtn active" data-logintab="site" id="loginTabSite">Site worker</button>
+      <button class="tabbtn" data-logintab="admin" id="loginTabAdmin">Admin</button>
+    </div>
+    <div id="loginSitePane">
+      <div class="field">
+        <label>Your name</label>
+        <input type="text" id="login_name" placeholder="e.g. Ramesh">
+      </div>
+      <div class="field">
+        <label>Site code</label>
+        <select id="login_site"><option value="">Loading sites…</option></select>
+      </div>
+      <div class="field">
+        <label>PIN</label>
+        <input type="password" id="login_pin" placeholder="4-6 digit PIN" inputmode="numeric">
+      </div>
+      <button class="btn primary" id="loginSiteBtn" style="width:100%;">Enter site</button>
+      <p class="hint" id="loginSiteHint"></p>
+    </div>
+    <div id="loginAdminPane" style="display:none;">
+      <div class="field">
+        <label>Your name</label>
+        <input type="text" id="login_admin_name" placeholder="e.g. Site owner">
+      </div>
+      <div class="field" id="adminPassField">
+        <label id="adminPassLabel">Admin password</label>
+        <input type="password" id="login_admin_pass" placeholder="Enter password">
+      </div>
+      <button class="btn primary" id="loginAdminBtn" style="width:100%;">Continue</button>
+      <p class="hint" id="loginAdminHint"></p>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="app" style="display:none;">
+  <div class="rail">
+    <div class="brandrow">
+      <div class="brand">Stock ledger<small>Multi-site inventory</small></div>
+      <div style="display:flex; gap:6px;">
+        <button class="gearbtn" id="reportBtn" title="Daily activity report">▦</button>
+        <button class="gearbtn" id="settingsBtn" title="Master data settings">⚙</button>
+        <button class="gearbtn" id="logoutBtn" title="Log out">⏻</button>
+      </div>
+    </div>
+    <div class="catalogpill" id="catalogPill">Loading master data…</div>
+    <div class="newsite" id="newsiteRow">
+      <input type="text" id="newSiteInput" placeholder="Site code">
+      <input type="text" id="newSitePin" placeholder="PIN" style="max-width:66px;">
+      <button id="newSiteBtn" title="Add site">+</button>
+    </div>
+    <div class="sitelist" id="siteList">
+      <div class="loading">Loading sites…</div>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="main-empty">Add a site on the left to start tracking stock, or select one from the list.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SITES_KEY = 'inv-sites';
+const CATALOG_KEY = 'inv-master-catalog';
+const SOURCE_KEY = 'inv-master-source';
+const ADMIN_PASS_KEY = 'inv-admin-pass';
+
+let sites = [];
+let activeSiteId = null;
+let itemsCache = {};
+let search = '';
+let catalog = [];
+let sourceMeta = { url: '', lastSynced: null };
+let currentUser = null;
+let adminPass = null;
+
+const SEED_CATALOG_TSV = `Sr	Category	Material	Size / Grade	Unit	HSN Code	GST %
+SKU-1	Steel / Reinforcement	TMT Bar	8mm	Pcs	7214	18
+SKU-2	Steel / Reinforcement	TMT Bar	10mm	Pcs	7214	18
+SKU-3	Steel / Reinforcement	TMT Bar	12mm	Pcs	7214	18
+SKU-4	Steel / Reinforcement	TMT Bar	16mm	Pcs	7214	18
+SKU-5	Steel / Reinforcement	TMT Bar	20mm	Pcs	7214	18
+SKU-6	Steel / Reinforcement	TMT Bar	25mm	Pcs	7214	18
+SKU-7	Steel / Reinforcement	Binding Wire	0.9 mm	Kg	7217	18
+SKU-8	Steel / Reinforcement	Binding Wire	1.0 mm	Kg	7217	18
+SKU-9	Steel / Reinforcement	Binding Wire	1.2 mm (18 Gauge)	Kg	7217	18
+SKU-10	Steel / Reinforcement	Binding Wire	1.6 mm	Kg	7217	18
+SKU-11	Steel / Reinforcement	Welded Mesh / Chicken Mesh	Standard	Sqm	7314	18
+SKU-12	Steel / Reinforcement	Structural Steel (Angle)	25x25	Kg	7216	18
+SKU-13	Steel / Reinforcement	Structural Steel (Angle)	50x50	Kg	7216	18
+SKU-14	Steel / Reinforcement	Structural Steel (Angle)	75x75	Kg	7216	18
+SKU-15	Steel / Reinforcement	Structural Steel (Channel)	75mm	Kg	7216	18
+SKU-16	Steel / Reinforcement	Structural Steel (Channel)	100mm	Kg	7216	18
+SKU-17	Steel / Reinforcement	Structural Steel (Channel)	150mm	Kg	7216	18
+SKU-18	Wood / Plywood	Plywood	6mm	Nos.	4412	18
+SKU-19	Wood / Plywood	Plywood	9mm	Nos.	4412	18
+SKU-20	Wood / Plywood	Plywood	12mm	Nos.	4412	18
+SKU-21	Wood / Plywood	Plywood	18mm	Nos.	4412	18
+SKU-22	Wood / Plywood	Blockboard	12mm	Nos.	4412	18
+SKU-23	Wood / Plywood	Blockboard	19mm	Nos.	4412	18
+SKU-24	Wood / Plywood	MDF Board	6mm	Nos.	4411	18
+SKU-25	Wood / Plywood	MDF Board	12mm	Nos.	4411	18
+SKU-26	Wood / Plywood	MDF Board	18mm	Nos.	4411	18
+SKU-27	Wood / Plywood	Shuttering Ply	12mm	Nos.	4412	18
+SKU-28	Wood / Plywood	Shuttering Ply	8mm	Nos.	4412	18
+SKU-29	Wood / Plywood	Timber / Wooden Batten	2x2 inch	RFT	4407	18
+SKU-30	Wood / Plywood	Timber / Wooden Batten	2x3 inch	RFT	4407	18
+SKU-31	Wood / Plywood	Timber / Wooden Batten	2.5x3 inch	RFT	4407	18
+SKU-32	Wood / Plywood	Timber / Wooden Batten	3x4 inch	RFT	4407	18
+SKU-33	Wood / Plywood	Timber / Wooden Batten	2x4 inch	RFT	4407	18
+SKU-34	Bricks & Blocks	Red Clay Brick (Standard)	9x4x3 inch	Nos.	6901	5
+SKU-35	Bricks & Blocks	Red Clay Brick (Modular)	19x9x9 cm	Nos.	6901	5
+SKU-36	Bricks & Blocks	Red Clay Brick (Tota for PCC)	4.5x4x3 inch	Nos.	6901	5
+SKU-37	Bricks & Blocks	AAC Block	100mm thick	Nos.	6810	18
+SKU-38	Bricks & Blocks	AAC Block	150mm thick	Nos.	6810	18
+SKU-39	Bricks & Blocks	AAC Block	200mm thick	Nos.	6810	18
+SKU-40	Bricks & Blocks	Solid Concrete Block	100mm	Nos.	6810	18
+SKU-41	Bricks & Blocks	Solid Concrete Block	150mm	Nos.	6810	18
+SKU-42	Bricks & Blocks	Hollow Block	200mm thick	Nos.	6810	18
+SKU-43	Aggregates / Sand	Coarse Aggregate (Gitti)	6mm	Cu ft	2517	5
+SKU-44	Aggregates / Sand	Coarse Aggregate (Gitti)	10mm	Cu ft	2517	5
+SKU-45	Aggregates / Sand	Coarse Aggregate (Gitti)	20mm	Cu ft	2517	5
+SKU-46	Aggregates / Sand	Coarse Aggregate (Gitti)	40mm	Cu ft	2517	5
+SKU-47	Aggregates / Sand	River Sand	Zone II	Cu ft	2505	5
+SKU-48	Aggregates / Sand	M-Sand / Manufactured Sand	Fine	Cu ft	2505	5
+SKU-49	Aggregates / Sand	Dust	Stone Dust	Cu ft	2517	5
+SKU-50	Aggregates / Sand	Dust	Crusher Dust	Cu ft	2517	5
+SKU-51	Aggregates / Sand	Dust	Quarry Dust	Cu ft	2517	5
+SKU-52	Aggregates / Sand	Dust	M-Sand Dust	Cu ft	2517	5
+SKU-53	Aggregates / Sand	Dust	Fine Dust	Cu ft	2517	5
+SKU-54	Cement	OPC Cement	43 Grade	Nos.	2523	28
+SKU-55	Cement	OPC Cement	53 Grade	Nos.	2523	28
+SKU-56	Cement	PPC Cement	Standard	Nos.	2523	28
+SKU-57	Cement	White Cement	Standard	Nos.	2523	28
+SKU-58	Concrete / Cement	Cover Block	25mm	Nos.	6810	18
+SKU-59	Concrete / Cement	Cover Block	40mm	Nos.	6810	18
+SKU-60	Concrete / Cement	Cover Block	50mm	Nos.	6810	18
+SKU-61	Pipes	GI Pipe	0.5 inch	RFT	7306	18
+SKU-62	Pipes	GI Pipe	1 inch	RFT	7306	18
+SKU-63	Pipes	GI Pipe	1.5 inch	RFT	7306	18
+SKU-64	Pipes	GI Pipe	2 inch	RFT	7306	18
+SKU-65	Pipes	CPVC Pipe	15mm	RFT	3917	18
+SKU-66	Pipes	CPVC Pipe	20mm	RFT	3917	18
+SKU-67	Pipes	CPVC Pipe	25mm	RFT	3917	18
+SKU-68	Pipes	UPVC Pipe (SWR)	75mm	RFT	3917	18
+SKU-69	Pipes	UPVC Pipe (SWR)	110mm	RFT	3917	18
+SKU-70	Pipes	UPVC Pipe (SWR)	160mm	RFT	3917	18
+SKU-71	Electrical	Wire (FR / FRLS)	1.5 sq mm	Mtr	8544	18
+SKU-72	Electrical	Wire (FR / FRLS)	2.5 sq mm	Mtr	8544	18
+SKU-73	Electrical	Wire (FR / FRLS)	4 sq mm	Mtr	8544	18
+SKU-74	Electrical	Wire (FR / FRLS)	6 sq mm	Mtr	8544	18
+SKU-75	Electrical	Conduit Pipe (PVC)	20mm	Mtr	3917	18
+SKU-76	Electrical	Conduit Pipe (PVC)	25mm	Mtr	3917	18
+SKU-77	Electrical	Conduit Pipe (PVC)	32mm	Mtr	3917	18
+SKU-78	Electrical	MCB (Single Pole)	6A	Nos	8536	18
+SKU-79	Electrical	MCB (Single Pole)	10A	Nos	8536	18
+SKU-80	Electrical	MCB (Single Pole)	16A	Nos	8536	18
+SKU-81	Electrical	MCB (Single Pole)	32A	Nos	8536	18
+SKU-82	Electrical	DB Box	4	Nos	8537	18
+SKU-83	Electrical	DB Box	8	Nos	8537	18
+SKU-84	Electrical	DB Box	12 way	Nos	8537	18
+SKU-85	Electrical	Switch & Socket (Modular)	Standard	Nos	8536	18
+SKU-86	Electrical	Fan Box	Standard	Nos	8536	18
+SKU-87	Electrical	Conceal Box	Standard	Nos	8536	18
+SKU-88	Electrical	Conceal Box	1M	Nos	8536	18
+SKU-89	Electrical	Conceal Box	2M	Nos	8536	18
+SKU-90	Electrical	Conceal Box	3M	Nos	8536	18
+SKU-91	Electrical	Conceal Box	4M	Nos	8536	18
+SKU-92	Electrical	Brown Tape	48mm	Nos	3919	18
+SKU-93	Electrical	Brown Tape	72mm	Nos	3919	18
+SKU-94	Glass	Plain Glass	4mm	Sqft	7005	18
+SKU-95	Glass	Plain Glass	5mm	Sqft	7005	18
+SKU-96	Glass	Plain Glass	6mm	Sqft	7005	18
+SKU-97	Glass	Plain Glass	8mm	Sqft	7005	18
+SKU-98	Glass	Toughened Glass	8mm	Sqft	7007	18
+SKU-99	Glass	Toughened Glass	10mm	Sqft	7007	18
+SKU-100	Glass	Toughened Glass	12mm	Sqft	7007	18
+SKU-101	Glass	Frosted Glass	4mm	Sqft	7005	18
+SKU-102	Glass	Frosted Glass	6mm	Sqft	7005	18
+SKU-103	Glass	Reflective Glass	6mm	Sqft	7005	18
+SKU-104	Waterproofing & Chemicals	Waterproofing Compound (Liquid)	Standard	Ltr	3824	18
+SKU-105	Waterproofing & Chemicals	Waterproofing Compound (Powder)	Standard	Kg	3824	18
+SKU-106	Waterproofing & Chemicals	Epoxy Grout	Standard	Kg	3214	18
+SKU-107	Waterproofing & Chemicals	Admixture / Construction Chemical	Plasticizer / Accelerator	Ltr	3824	18
+SKU-108	Waterproofing & Chemicals	Curing Compound	Standard	Ltr	3824	18
+SKU-109	Waterproofing & Chemicals	Tile Adhesive	Standard / Heavy Duty	Bag	3214	18
+SKU-110	Paints	Primer (Wall)	Standard	Ltr	3208	18
+SKU-111	Paints	Primer (Metal)	Red Oxide	Ltr	3208	18
+SKU-112	Paints	Primer (Metal)	Grey	Ltr	3208	18
+SKU-113	Paints	Interior Emulsion	Standard	Ltr	3209	18
+SKU-114	Paints	Exterior Paint (Weather Coat)	Standard	Ltr	3209	18
+SKU-115	Paints	Enamel Paint	For Metal / Wood	Ltr	3208	18
+SKU-116	Paints	PU Coating	Standard	Ltr	3208	18
+SKU-117	Tiles & Flooring	Floor Tile (Vitrified)	600x600mm	Sqft	6907	18
+SKU-118	Tiles & Flooring	Floor Tile (Vitrified)	800x800mm	Sqft	6907	18
+SKU-119	Tiles & Flooring	Wall Tile (Ceramic)	300x450mm	Sqft	6907	18
+SKU-120	Tiles & Flooring	Wall Tile (Ceramic)	300x600mm	Sqft	6907	18
+SKU-121	Tiles & Flooring	Anti-Skid Tile	300x300mm	Sqft	6907	18
+SKU-122	Tiles & Flooring	Marble Slab	18mm thick	Sqft	6802	18
+SKU-123	Tiles & Flooring	Granite Slab	18mm	Sqft	6802	18
+SKU-124	Tiles & Flooring	Granite Slab	20mm thick	Sqft	6802	18
+SKU-125	Hardware & Fasteners	Screws (Wood)	1 inch	Box	7318	18
+SKU-126	Hardware & Fasteners	Screws (Wood)	1.5 inch	Box	7318	18
+SKU-127	Hardware & Fasteners	Screws (Wood)	2 inch	Box	7318	18
+SKU-128	Hardware & Fasteners	Screws (Wood)	3 inch	Box	7318	18
+SKU-129	Hardware & Fasteners	Anchor Bolt	M6	Nos	7318	18
+SKU-130	Hardware & Fasteners	Anchor Bolt	M8	Nos	7318	18
+SKU-131	Hardware & Fasteners	Anchor Bolt	M10	Nos	7318	18
+SKU-132	Hardware & Fasteners	Anchor Bolt	M12	Nos	7318	18
+SKU-133	Hardware & Fasteners	Nuts & Bolts	Various sizes	Nos	7318	18
+SKU-134	Hardware & Fasteners	Nails	1 inch	Kg	7317	18
+SKU-135	Hardware & Fasteners	Nails	2 inch	Kg	7317	18
+SKU-136	Hardware & Fasteners	Nails	3 inch	Kg	7317	18
+SKU-137	Hardware & Fasteners	Nails	4 inch	Kg	7317	18
+SKU-138	Hardware & Fasteners	Door Hinge	3 inch	Nos.	8302	18
+SKU-139	Hardware & Fasteners	Door Hinge	4 inch	Nos.	8302	18
+SKU-140	Hardware & Fasteners	Door Hinge	5 inch	Nos.	8302	18
+SKU-141	Hardware & Fasteners	Door Handle / Lock	Standard / Mortise	Nos.	8301	18
+SKU-142	Ready Mix Concrete (RMC)	Concrete (RMC)	M10	Cum	38245010	18
+SKU-143	Ready Mix Concrete (RMC)	Concrete (RMC)	M20	Cum	38245010	18
+SKU-144	Ready Mix Concrete (RMC)	Concrete (RMC)	M25	Cum	38245010	18
+SKU-145	Ready Mix Concrete (RMC)	Concrete (RMC)	M30	Cum	38245010	18
+SKU-146	Electrical	Solvent	200 ml	Nos	38140010	18
+SKU-147	Boulder	Kacchi rodi	4 inch	Cft	2517	5
+SKU-148	Chemical	Anti termite solut5	10L	Litres	11	18
+SKU-149	Curing	Curing pipe	1.5 inch	Inch	CP	18
+SKU-150	Boring material	Borewell drilling charges: borewell machine transportation charges: PVC pipe supreme6kg: pvc process filter material: pvc coloum Astral/roll pipe; safety wire: adopter:fittings: submersible pump Crompton: submersible panel:pvc pipe cartage:pump instalation charge:	Borewell drilling charges250mm :pvc pipe supreme6kg 200mm: pvc coloum pipe astral /roll pipe 50mm :adopter 50mm fitting 50 mm submersible pump Crompton 3 hp:: fittings 50 mm 3 core submersible cable4mm :: submersible panel 3 hp	Borewell drilling charges180ft:pvc pipe supreme6kg 180ft pv coloum pipe Astral 100ft: adopter 1 pic: safety wire 35 mtr:3 core submersible cable 40 mtr			
+SKU-151	Dharam	Dharam	1000 liter	1000 liter		
+SKU-152	Tin shed	Ten shed	4by 10	4x10		
+SKU-153	Ms door	Ms door	3x6	3x6		
+SKU-154	Bricks and blocks	Cover block	40	Mm	6810	18
+SKU-155	Electrical	Night light	100w	2	Light	18`;
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str == null ? '' : String(str);
+  return d.innerHTML;
+}
+
+function stockStatus(it){
+  const min = (it.min !== undefined && it.min !== null && it.min !== '') ? Number(it.min) : null;
+  const max = (it.max !== undefined && it.max !== null && it.max !== '') ? Number(it.max) : null;
+  const qty = Number(it.qty) || 0;
+  if(min !== null && qty < min) return { label: 'Low', cls: 'stat-red' };
+  if(max !== null && qty > max) return { label: 'Over', cls: 'stat-red' };
+  if(min !== null || max !== null) return { label: 'OK', cls: 'stat-green' };
+  return { label: 'No limits', cls: 'stat-none' };
+}
+
+/* ---------- storage: sites ---------- */
+
+async function loadSites(){
+  try{
+    const res = await window.storage.get(SITES_KEY, true);
+    sites = res ? JSON.parse(res.value) : [];
+  }catch(e){
+    sites = [];
+  }
+}
+
+async function saveSites(){
+  try{
+    await window.storage.set(SITES_KEY, JSON.stringify(sites), true);
+  }catch(e){
+    toast('Could not save — try again');
+  }
+}
+
+async function loadAdminPass(){
+  try{
+    const res = await window.storage.get(ADMIN_PASS_KEY, true);
+    adminPass = res ? res.value : null;
+  }catch(e){
+    adminPass = null;
+  }
+}
+
+async function saveAdminPass(pass){
+  adminPass = pass;
+  try{
+    await window.storage.set(ADMIN_PASS_KEY, pass, true);
+  }catch(e){
+    toast('Could not save admin password');
+  }
+}
+
+async function loadItems(siteId){
+  if(itemsCache[siteId]) return itemsCache[siteId];
+  try{
+    const res = await window.storage.get('inv-items:' + siteId, true);
+    const items = res ? JSON.parse(res.value) : [];
+    itemsCache[siteId] = items;
+    return items;
+  }catch(e){
+    itemsCache[siteId] = [];
+    return [];
+  }
+}
+
+async function saveItems(siteId, items){
+  itemsCache[siteId] = items;
+  try{
+    await window.storage.set('inv-items:' + siteId, JSON.stringify(items), true);
+  }catch(e){
+    toast('Could not save — try again');
+  }
+}
+
+let logCache = {};
+
+async function loadLog(siteId){
+  if(logCache[siteId]) return logCache[siteId];
+  try{
+    const res = await window.storage.get('inv-log:' + siteId, true);
+    const log = res ? JSON.parse(res.value) : [];
+    logCache[siteId] = log;
+    return log;
+  }catch(e){
+    logCache[siteId] = [];
+    return [];
+  }
+}
+
+async function saveLog(siteId, log){
+  logCache[siteId] = log;
+  try{
+    await window.storage.set('inv-log:' + siteId, JSON.stringify(log), true);
+  }catch(e){
+    toast('Could not save history');
+  }
+}
+
+/* ---------- storage: master catalog ---------- */
+
+async function loadCatalogFromStorage(){
+  try{
+    const res = await window.storage.get(CATALOG_KEY, true);
+    catalog = res ? JSON.parse(res.value) : [];
+  }catch(e){ catalog = []; }
+  try{
+    const res2 = await window.storage.get(SOURCE_KEY, true);
+    sourceMeta = res2 ? JSON.parse(res2.value) : { url: '', lastSynced: null };
+  }catch(e){ sourceMeta = { url: '', lastSynced: null }; }
+}
+
+async function saveCatalog(newCatalog){
+  catalog = newCatalog;
+  try{ await window.storage.set(CATALOG_KEY, JSON.stringify(catalog), true); }
+  catch(e){ toast('Could not save catalog'); }
+}
+
+async function saveSourceMeta(){
+  try{ await window.storage.set(SOURCE_KEY, JSON.stringify(sourceMeta), true); }
+  catch(e){}
+}
+
+function renderCatalogPill(){
+  const pill = document.getElementById('catalogPill');
+  if(catalog.length === 0){
+    pill.className = 'catalogpill warn';
+    pill.innerHTML = 'No master data loaded yet. Click <b>⚙</b> above to connect your sheet or paste data.';
+  } else {
+    const when = sourceMeta.lastSynced ? new Date(sourceMeta.lastSynced).toLocaleString() : 'manually';
+    pill.className = 'catalogpill ok';
+    pill.innerHTML = `<b>${catalog.length}</b> SKUs loaded<br>Synced ${escapeHtml(when)}`;
+  }
+}
+
+/* ---------- CSV / JSON parsing ---------- */
+
+function detectDelimiter(text){
+  const firstLine = text.split('\n')[0] || '';
+  const tabs = (firstLine.match(/\t/g) || []).length;
+  const commas = (firstLine.match(/,/g) || []).length;
+  return tabs > commas ? '\t' : ',';
+}
+
+function parseCSV(text, delimiter){
+  delimiter = delimiter || detectDelimiter(text);
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], next = text[i+1];
+    if(inQuotes){
+      if(c === '"' && next === '"'){ field += '"'; i++; }
+      else if(c === '"'){ inQuotes = false; }
+      else{ field += c; }
+    } else {
+      if(c === '"'){ inQuotes = true; }
+      else if(c === delimiter){ row.push(field); field=''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if(c === '\r'){ /* skip */ }
+      else{ field += c; }
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  if(rows.length === 0) return [];
+  const headers = rows[0].map(h => h.trim());
+  return rows.slice(1).filter(r => r.some(c => c && c.trim() !== '')).map(r => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (r[i] !== undefined ? r[i].trim() : ''));
+    return obj;
+  });
+}
+
+function normKey(k){ return String(k).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+function normalizeRows(rawRows){
+  return rawRows.map(row => {
+    const map = {};
+    Object.keys(row).forEach(k => { map[normKey(k)] = row[k]; });
+    const pick = (...cands) => {
+      for(const c of cands){ if(map[c] !== undefined && map[c] !== '') return map[c]; }
+      return '';
+    };
+    return {
+      sku: pick('sku','sr','srno','id','code'),
+      category: pick('category','cat'),
+      material: pick('material','item','materialname'),
+      size: pick('sizegrade','size','grade'),
+      unit: pick('unit','uom'),
+      hsn: pick('hsncode','hsn'),
+      gst: pick('gst','gstpercent','gst','taxpercent')
+    };
+  }).filter(r => r.material || r.sku);
+}
+
+async function fetchCatalogFromUrl(url){
+  const res = await fetch(url, { cache: 'no-store' });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  let rawRows;
+  const trimmed = text.trim();
+  if(trimmed.startsWith('[') || trimmed.startsWith('{')){
+    const data = JSON.parse(trimmed);
+    rawRows = Array.isArray(data) ? data : (data.data || data.rows || data.values || []);
+  } else {
+    rawRows = parseCSV(text);
+  }
+  return normalizeRows(rawRows);
+}
+
+/* ---------- settings modal ---------- */
+
+function openSettingsModal(){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal wide">
+      <h3>Master data source</h3>
+      <p class="modalsub">This catalog (SKU, Category, Material, Size, Unit, HSN, GST) is shared across all sites.</p>
+      <div class="tabs">
+        <button class="tabbtn active" data-tab="url">Fetch from URL</button>
+        <button class="tabbtn" data-tab="paste">Paste CSV</button>
+      </div>
+      <div id="tabUrl">
+        <div class="field">
+          <label>Published CSV / JSON URL</label>
+          <input type="text" id="f_url" placeholder="https://..." value="${escapeHtml(sourceMeta.url||'')}">
+        </div>
+        <p class="hint">Works with a Google Sheet published as CSV, or a JSON/CSV file hosted anywhere with CORS enabled (Apps Script web app, GitHub Pages, your own server, etc).</p>
+        <div class="syncrow">
+          <span>${sourceMeta.lastSynced ? 'Last synced: ' + escapeHtml(new Date(sourceMeta.lastSynced).toLocaleString()) : 'Not synced yet'}</span>
+        </div>
+        <div class="modalbtns">
+          <button class="btn" id="closeBtn1">Close</button>
+          <button class="btn primary" id="fetchBtn">Fetch now</button>
+        </div>
+      </div>
+      <div id="tabPaste" style="display:none;">
+        <div class="field">
+          <label>Paste CSV data (with header row)</label>
+          <textarea id="f_paste" placeholder="Sr,Category,Material,Size / Grade,Unit,HSN Code,GST %&#10;SKU-1,Steel / Reinforcement,TMT Bar,8mm,Pcs,7214,18"></textarea>
+        </div>
+        <div class="modalbtns">
+          <button class="btn" id="closeBtn2">Close</button>
+          <button class="btn primary" id="loadPasteBtn">Load data</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+
+  overlay.querySelectorAll('.tabbtn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      overlay.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      document.getElementById('tabUrl').style.display = b.dataset.tab === 'url' ? 'block' : 'none';
+      document.getElementById('tabPaste').style.display = b.dataset.tab === 'paste' ? 'block' : 'none';
+    });
+  });
+
+  overlay.querySelector('#closeBtn1').addEventListener('click', ()=>overlay.remove());
+  overlay.querySelector('#closeBtn2').addEventListener('click', ()=>overlay.remove());
+
+  overlay.querySelector('#fetchBtn').addEventListener('click', async ()=>{
+    const url = document.getElementById('f_url').value.trim();
+    if(!url){ toast('Enter a URL first'); return; }
+    const btn = overlay.querySelector('#fetchBtn');
+    btn.disabled = true; btn.textContent = 'Fetching…';
+    try{
+      const rows = await fetchCatalogFromUrl(url);
+      if(rows.length === 0){ toast('No rows found at that URL'); btn.disabled=false; btn.textContent='Fetch now'; return; }
+      await saveCatalog(rows);
+      sourceMeta = { url, lastSynced: Date.now() };
+      await saveSourceMeta();
+      renderCatalogPill();
+      overlay.remove();
+      toast(`Loaded ${rows.length} SKUs from source`);
+    }catch(err){
+      toast('Fetch failed — check the URL and CORS settings');
+      btn.disabled = false; btn.textContent = 'Fetch now';
+    }
+  });
+
+  overlay.querySelector('#loadPasteBtn').addEventListener('click', async ()=>{
+    const text = document.getElementById('f_paste').value.trim();
+    if(!text){ toast('Paste some CSV data first'); return; }
+    try{
+      const rawRows = parseCSV(text);
+      const rows = normalizeRows(rawRows);
+      if(rows.length === 0){ toast('Could not read any rows from that text'); return; }
+      await saveCatalog(rows);
+      sourceMeta = { url: sourceMeta.url || '', lastSynced: Date.now() };
+      await saveSourceMeta();
+      renderCatalogPill();
+      overlay.remove();
+      toast(`Loaded ${rows.length} SKUs`);
+    }catch(err){
+      toast('Could not parse that data');
+    }
+  });
+}
+
+document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
+
+/* ---------- sites ---------- */
+
+function renderSiteList(){
+  const el = document.getElementById('siteList');
+  const visibleSites = currentUser && currentUser.role === 'site' ? sites.filter(s=>s.id===currentUser.siteId) : sites;
+  if(visibleSites.length === 0){
+    el.innerHTML = '<div class="empty-rail">No sites yet. Add your first site above — every site gets its own stock list.</div>';
+    return;
+  }
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  el.innerHTML = visibleSites.map(s => {
+    const items = itemsCache[s.id];
+    const count = items ? items.length : null;
+    return `<div class="sitetag ${s.id===activeSiteId?'active':''}" data-id="${s.id}">
+      <span class="name">${escapeHtml(s.name)}</span>
+      <span class="cnt">${count===null?'…':count}</span>
+      ${isAdmin ? `<button class="del" data-id="${s.id}" title="Delete site">×</button>` : ''}
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.sitetag').forEach(node=>{
+    node.addEventListener('click', (e)=>{
+      if(e.target.classList.contains('del')) return;
+      selectSite(node.dataset.id);
+    });
+  });
+  el.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      deleteSite(btn.dataset.id);
+    });
+  });
+}
+
+async function selectSite(id){
+  activeSiteId = id;
+  renderSiteList();
+  await loadItems(id);
+  renderSiteList();
+  renderMain();
+}
+
+async function deleteSite(id){
+  const site = sites.find(s=>s.id===id);
+  if(!confirm(`Delete "${site.name}" and all its stock records? This can't be undone.`)) return;
+  sites = sites.filter(s=>s.id!==id);
+  await saveSites();
+  try{ await window.storage.delete('inv-items:' + id, true); }catch(e){}
+  try{ await window.storage.delete('inv-log:' + id, true); }catch(e){}
+  delete itemsCache[id];
+  if(activeSiteId === id){
+    activeSiteId = null;
+    document.getElementById('main').innerHTML = '<div class="main-empty">Add a site on the left to start tracking stock, or select one from the list.</div>';
+  }
+  renderSiteList();
+  toast('Site deleted');
+}
+
+document.getElementById('newSiteBtn').addEventListener('click', addSite);
+document.getElementById('newSiteInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('newSitePin').focus(); });
+document.getElementById('newSitePin').addEventListener('keydown', (e)=>{ if(e.key==='Enter') addSite(); });
+
+async function addSite(){
+  const input = document.getElementById('newSiteInput');
+  const pinInput = document.getElementById('newSitePin');
+  const name = input.value.trim();
+  const pin = pinInput.value.trim();
+  if(!name){ toast('Enter a site code'); return; }
+  if(!pin || pin.length < 4){ toast('Set a PIN (at least 4 digits) for this site'); return; }
+  if(sites.some(s=>s.name.toLowerCase() === name.toLowerCase())){ toast('A site with this code already exists'); return; }
+  const site = { id: uid(), name, pin, createdAt: Date.now() };
+  sites.push(site);
+  itemsCache[site.id] = [];
+  input.value = '';
+  pinInput.value = '';
+  await saveSites();
+  await saveItems(site.id, []);
+  renderSiteList();
+  selectSite(site.id);
+  toast('Site added — share the PIN with that site\u2019s team');
+}
+
+/* ---------- main / items table ---------- */
+
+function renderMain(){
+  const site = sites.find(s=>s.id===activeSiteId);
+  if(!site) return;
+  const items = itemsCache[activeSiteId] || [];
+  const filtered = items.filter(it => {
+    if(!search) return true;
+    const q = search.toLowerCase();
+    return (it.material||'').toLowerCase().includes(q) || (it.category||'').toLowerCase().includes(q) || (it.sku||'').toLowerCase().includes(q) || (it.size||'').toLowerCase().includes(q);
+  });
+  const totalQty = items.reduce((a,b)=>a + (Number(b.qty)||0), 0);
+  const lowItems = items.filter(it => stockStatus(it).label === 'Low');
+  const overItems = items.filter(it => stockStatus(it).label === 'Over');
+
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="header">
+      <div>
+        <div class="htitle">${escapeHtml(site.name)}</div>
+        <div class="hsub">${items.length} item type${items.length===1?'':'s'} · ${totalQty} total units</div>
+      </div>
+    </div>
+    ${(lowItems.length || overItems.length) ? `
+    <div class="alertbanner">
+      <span>⚠</span>
+      <span>${lowItems.length ? `${lowItems.length} item${lowItems.length===1?'':'s'} below minimum level` : ''}${lowItems.length && overItems.length ? ' · ' : ''}${overItems.length ? `${overItems.length} item${overItems.length===1?'':'s'} above maximum level` : ''}</span>
+    </div>` : ''}
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Search SKU, material, size, category…" value="${escapeHtml(search)}">
+      <button class="btn" id="historyBtn">History</button>
+      <button class="addbtn" id="movementBtn" ${catalog.length===0?'disabled title="Load master data first"':''}>+ Record IN / OUT</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="rownum">#</th>
+          <th>SKU</th>
+          <th>Item</th>
+          <th>Category</th>
+          <th>Quantity</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="itemsBody"></tbody>
+    </table>
+  `;
+
+  const body = document.getElementById('itemsBody');
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  if(filtered.length === 0){
+    body.innerHTML = `<tr><td colspan="7"><div class="tableempty">${items.length===0 ? (catalog.length===0 ? 'Load your master data (⚙ top left) before adding items.' : 'No items yet. Use "Record IN / OUT" to start tracking stock here.') : 'No items match your search.'}</div></td></tr>`;
+  } else {
+    body.innerHTML = filtered.map((it, i) => {
+      const st = stockStatus(it);
+      return `
+      <tr data-id="${it.id}">
+        <td class="rownum">${i+1}</td>
+        <td class="sku">${escapeHtml(it.sku||'—')}</td>
+        <td class="itemname">${escapeHtml(it.material)}<small>${escapeHtml(it.size||'')}</small></td>
+        <td>${it.category ? `<span class="chip">${escapeHtml(it.category)}</span>` : ''}</td>
+        <td><span class="qty ${Number(it.qty)<=0?'low':''}">${it.qty}</span> <span class="unit">${escapeHtml(it.unit||'')}</span></td>
+        <td><span class="statuschip ${st.cls}"><span class="dot"></span>${st.label}</span></td>
+        <td>
+          <div class="rowactions">
+            <button class="iconbtn quickin" data-id="${it.id}" title="Record IN">↓</button>
+            <button class="iconbtn danger quickout" data-id="${it.id}" title="Record OUT">↑</button>
+            ${isAdmin ? `
+            <button class="iconbtn edit" data-id="${it.id}" title="Manually correct">✎</button>
+            <button class="iconbtn danger del" data-id="${it.id}" title="Delete">×</button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `;}).join('');
+  }
+
+  document.getElementById('searchInput').addEventListener('input', (e)=>{
+    search = e.target.value;
+    renderMain();
+    setTimeout(()=>{
+      const inp = document.getElementById('searchInput');
+      if(inp){ inp.focus(); inp.setSelectionRange(search.length, search.length); }
+    },0);
+  });
+  const moveBtn = document.getElementById('movementBtn');
+  if(moveBtn && !moveBtn.disabled) moveBtn.addEventListener('click', ()=>openMovementModal());
+  document.getElementById('historyBtn').addEventListener('click', ()=>openHistoryModal());
+  body.querySelectorAll('.quickin').forEach(b=>b.addEventListener('click', ()=>{
+    const it = items.find(x=>x.id===b.dataset.id);
+    if(it) openQuickMoveModal(it, 'IN');
+  }));
+  body.querySelectorAll('.quickout').forEach(b=>b.addEventListener('click', ()=>{
+    const it = items.find(x=>x.id===b.dataset.id);
+    if(it) openQuickMoveModal(it, 'OUT');
+  }));
+  body.querySelectorAll('.edit').forEach(b=>b.addEventListener('click', ()=>openItemModal(b.dataset.id)));
+  body.querySelectorAll('.del').forEach(b=>b.addEventListener('click', ()=>deleteItem(b.dataset.id)));
+}
+
+/* ---------- add/edit item modal with cascading dropdowns ---------- */
+
+function openItemModal(itemId){
+  const items = itemsCache[activeSiteId] || [];
+  const existing = itemId ? items.find(i=>i.id===itemId) : null;
+
+  const categories = [...new Set(catalog.map(c=>c.category).filter(Boolean))].sort();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>${existing ? 'Edit item' : 'Add item'}</h3>
+      <div class="field">
+        <label>Category</label>
+        <select id="f_cat">
+          <option value="">Select category…</option>
+          ${categories.map(c=>`<option value="${escapeHtml(c)}" ${existing&&existing.category===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Material</label>
+        <select id="f_mat" disabled>
+          <option value="">Select category first…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Size / grade</label>
+        <select id="f_size" disabled>
+          <option value="">Select material first…</option>
+        </select>
+      </div>
+      <div class="readonlybox" id="skuBox" style="display:none;">
+        <div><span>SKU</span><b id="rb_sku">—</b></div>
+        <div><span>Unit</span><b id="rb_unit">—</b></div>
+        <div><span>HSN code</span><b id="rb_hsn">—</b></div>
+        <div><span>GST %</span><b id="rb_gst">—</b></div>
+      </div>
+      <div class="field">
+        <label>Quantity</label>
+        <input type="number" id="f_qty" placeholder="0" value="${existing?existing.qty:''}">
+      </div>
+      <div class="modalrow">
+        <div class="field">
+          <label>Min level (alert if below)</label>
+          <input type="number" id="f_min" placeholder="e.g. 10" value="${existing&&existing.min!=null?existing.min:''}">
+        </div>
+        <div class="field">
+          <label>Max level (alert if above)</label>
+          <input type="number" id="f_max" placeholder="e.g. 500" value="${existing&&existing.max!=null?existing.max:''}">
+        </div>
+      </div>
+      <div class="modalbtns">
+        <button class="btn" id="cancelBtn">Cancel</button>
+        <button class="btn primary" id="saveBtn" disabled>${existing?'Save changes':'Add item'}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const catSel = document.getElementById('f_cat');
+  const matSel = document.getElementById('f_mat');
+  const sizeSel = document.getElementById('f_size');
+  const skuBox = document.getElementById('skuBox');
+  const saveBtn = document.getElementById('saveBtn');
+  let selectedRow = null;
+
+  function populateMaterials(){
+    const cat = catSel.value;
+    if(!cat){ matSel.innerHTML = '<option value="">Select category first…</option>'; matSel.disabled = true; resetSize(); return; }
+    const materials = [...new Set(catalog.filter(c=>c.category===cat).map(c=>c.material).filter(Boolean))].sort();
+    matSel.innerHTML = '<option value="">Select material…</option>' + materials.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+    matSel.disabled = false;
+    resetSize();
+  }
+  function resetSize(){
+    sizeSel.innerHTML = '<option value="">Select material first…</option>';
+    sizeSel.disabled = true;
+    skuBox.style.display = 'none';
+    selectedRow = null;
+    saveBtn.disabled = true;
+  }
+  function populateSizes(){
+    const cat = catSel.value, mat = matSel.value;
+    if(!mat){ resetSize(); return; }
+    const rows = catalog.filter(c=>c.category===cat && c.material===mat);
+    sizeSel.innerHTML = '<option value="">Select size / grade…</option>' + rows.map(r=>`<option value="${escapeHtml(r.size)}">${escapeHtml(r.size||'Standard')}</option>`).join('');
+    sizeSel.disabled = false;
+    skuBox.style.display = 'none';
+    selectedRow = null;
+    saveBtn.disabled = true;
+  }
+  function selectSize(){
+    const cat = catSel.value, mat = matSel.value, size = sizeSel.value;
+    selectedRow = catalog.find(c=>c.category===cat && c.material===mat && c.size===size) || null;
+    if(selectedRow){
+      document.getElementById('rb_sku').textContent = selectedRow.sku || '—';
+      document.getElementById('rb_unit').textContent = selectedRow.unit || '—';
+      document.getElementById('rb_hsn').textContent = selectedRow.hsn || '—';
+      document.getElementById('rb_gst').textContent = selectedRow.gst ? selectedRow.gst + '%' : '—';
+      skuBox.style.display = 'grid';
+      saveBtn.disabled = false;
+      const dupe = items.find(i => i.sku === selectedRow.sku && (!existing || i.id !== existing.id));
+      if(dupe){
+        document.getElementById('f_qty').value = dupe.qty;
+        saveBtn.textContent = 'Update quantity';
+      } else {
+        saveBtn.textContent = existing ? 'Save changes' : 'Add item';
+      }
+    } else {
+      skuBox.style.display = 'none';
+      saveBtn.disabled = true;
+    }
+  }
+
+  catSel.addEventListener('change', populateMaterials);
+  matSel.addEventListener('change', populateSizes);
+  sizeSel.addEventListener('change', selectSize);
+
+  if(existing){
+    populateMaterials();
+    setTimeout(()=>{
+      matSel.value = existing.material;
+      populateSizes();
+      setTimeout(()=>{
+        sizeSel.value = existing.size;
+        selectSize();
+      }, 0);
+    }, 0);
+  }
+
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+  document.getElementById('cancelBtn').addEventListener('click', ()=>overlay.remove());
+  saveBtn.addEventListener('click', async ()=>{
+    if(!selectedRow) return;
+    const qty = Number(document.getElementById('f_qty').value) || 0;
+    const minVal = document.getElementById('f_min').value;
+    const maxVal = document.getElementById('f_max').value;
+    const min = minVal === '' ? null : Number(minVal);
+    const max = maxVal === '' ? null : Number(maxVal);
+    let list = itemsCache[activeSiteId] || [];
+    const dupe = list.find(i => i.sku === selectedRow.sku && (!existing || i.id !== existing.id));
+    if(dupe){
+      list = list.map(i => i.id === dupe.id ? {...i, qty, min, max} : i);
+      if(existing && existing.id !== dupe.id) list = list.filter(i => i.id !== existing.id);
+    } else if(existing){
+      list = list.map(i => i.id === existing.id ? {...i, sku:selectedRow.sku, category:selectedRow.category, material:selectedRow.material, size:selectedRow.size, unit:selectedRow.unit, hsn:selectedRow.hsn, gst:selectedRow.gst, qty, min, max} : i);
+    } else {
+      list = [...list, { id: uid(), sku:selectedRow.sku, category:selectedRow.category, material:selectedRow.material, size:selectedRow.size, unit:selectedRow.unit, hsn:selectedRow.hsn, gst:selectedRow.gst, qty, min, max, addedAt: Date.now() }];
+    }
+    await saveItems(activeSiteId, list);
+    overlay.remove();
+    renderSiteList();
+    renderMain();
+    toast(dupe ? 'Quantity updated' : (existing ? 'Item updated' : 'Item added'));
+  });
+}
+
+async function deleteItem(itemId){
+  let items = itemsCache[activeSiteId] || [];
+  items = items.filter(i => i.id !== itemId);
+  await saveItems(activeSiteId, items);
+  renderSiteList();
+  renderMain();
+  toast('Item deleted');
+}
+
+/* ---------- material IN / OUT movement form ---------- */
+
+/* ---------- shared movement application logic ---------- */
+
+async function applyMovement(siteId, movementType, stagedList){
+  await loadItems(siteId);
+  await loadLog(siteId);
+  let list = itemsCache[siteId] || [];
+  let log = logCache[siteId] || [];
+  const now = Date.now();
+  const actor = (currentUser && currentUser.actorName) || 'Unknown';
+  const breached = [];
+  for(const s of stagedList){
+    const idx = list.findIndex(i => i.sku === s.sku);
+    const delta = movementType === 'IN' ? s.qty : -s.qty;
+    let updated;
+    if(idx >= 0){
+      updated = { ...list[idx], qty: (Number(list[idx].qty)||0) + delta };
+      list[idx] = updated;
+    } else {
+      updated = { id: uid(), sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: delta, addedAt: now };
+      list.push(updated);
+    }
+    const st = stockStatus(updated);
+    if(st.label === 'Low' || st.label === 'Over') breached.push(`${s.material} (${st.label})`);
+    log.push({ id: uid(), type: movementType, sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: s.qty, by: actor, at: now });
+  }
+  await saveItems(siteId, list);
+  await saveLog(siteId, log);
+  return { breached };
+}
+
+function openQuickMoveModal(item, defaultType){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>${escapeHtml(item.material)}</h3>
+      <p class="modalsub">${escapeHtml(item.sku)} · ${escapeHtml(item.size||'')} · Current stock: ${item.qty} ${escapeHtml(item.unit||'')}</p>
+      <div class="movetoggle">
+        <button type="button" id="q_in" class="${defaultType==='IN'?'active-in':''}">IN (Received)</button>
+        <button type="button" id="q_out" class="${defaultType==='OUT'?'active-out':''}">OUT (Issued)</button>
+      </div>
+      <div class="field">
+        <label>Quantity (${escapeHtml(item.unit||'')})</label>
+        <input type="number" id="q_qty" placeholder="e.g. 10" autofocus>
+      </div>
+      <div class="modalbtns">
+        <button class="btn" id="q_cancel">Cancel</button>
+        <button class="btn primary" id="q_submit">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  let type = defaultType;
+  const inBtn = document.getElementById('q_in');
+  const outBtn = document.getElementById('q_out');
+  inBtn.addEventListener('click', ()=>{ type='IN'; inBtn.className='active-in'; outBtn.className=''; });
+  outBtn.addEventListener('click', ()=>{ type='OUT'; outBtn.className='active-out'; inBtn.className=''; });
+  const qtyInput = document.getElementById('q_qty');
+  setTimeout(()=>qtyInput.focus(), 50);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+  document.getElementById('q_cancel').addEventListener('click', ()=>overlay.remove());
+  document.getElementById('q_submit').addEventListener('click', async ()=>{
+    const qty = Number(qtyInput.value);
+    if(!qty || qty <= 0){ toast('Enter a quantity'); return; }
+    const submitBtn = document.getElementById('q_submit');
+    submitBtn.disabled = true; submitBtn.textContent = 'Saving…';
+    const { breached } = await applyMovement(activeSiteId, type, [{ sku:item.sku, category:item.category, material:item.material, size:item.size, unit:item.unit, qty }]);
+    overlay.remove();
+    renderSiteList();
+    renderMain();
+    toast(breached.length > 0 ? `Saved. ⚠ ${item.material} is now ${breached[0].split('(')[1].replace(')','')}` : `${type === 'IN' ? 'Received' : 'Issued'} ${qty} ${item.unit||''}`);
+  });
+}
+
+function openMovementModal(){
+  let targetSiteId = activeSiteId;
+  let movementType = 'IN';
+  let staged = [];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>Site material IN / OUT</h3>
+      <p class="modalsub">Record material received (IN) or issued (OUT) at site.</p>
+      <div class="field">
+        <label>Site</label>
+        <select id="m_site" ${currentUser && currentUser.role==='site' ? 'disabled' : ''}>
+          ${(currentUser && currentUser.role==='site' ? sites.filter(s=>s.id===currentUser.siteId) : sites).map(s=>`<option value="${s.id}" ${s.id===targetSiteId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="movetoggle">
+        <button type="button" id="m_in" class="active-in">IN (Received)</button>
+        <button type="button" id="m_out">OUT (Issued)</button>
+      </div>
+      <div class="sectionlabel">Add item</div>
+      <div class="field">
+        <label>Category</label>
+        <select id="m_cat"><option value="">Select category…</option>
+          ${[...new Set(catalog.map(c=>c.category).filter(Boolean))].sort().map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Material</label>
+        <select id="m_mat" disabled><option value="">Select category first…</option></select>
+      </div>
+      <div class="field">
+        <label>SKU / size</label>
+        <select id="m_size" disabled><option value="">Select material first…</option></select>
+      </div>
+      <div class="modalrow">
+        <div class="field">
+          <label>Unit</label>
+          <input type="text" id="m_unit" disabled value="—">
+        </div>
+        <div class="field">
+          <label>Quantity</label>
+          <input type="number" id="m_qty" placeholder="e.g. 25">
+        </div>
+      </div>
+      <button type="button" class="addtolistbtn" id="m_addbtn" disabled>+ Add to list</button>
+      <div class="stagelist" id="m_staged"><div class="empty">No items added yet</div></div>
+      <div class="modalbtns">
+        <button class="btn" id="m_cancel">Cancel</button>
+        <button class="btn primary" id="m_submit" disabled>Submit all</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const siteSel = document.getElementById('m_site');
+  const inBtn = document.getElementById('m_in');
+  const outBtn = document.getElementById('m_out');
+  const catSel = document.getElementById('m_cat');
+  const matSel = document.getElementById('m_mat');
+  const sizeSel = document.getElementById('m_size');
+  const unitInput = document.getElementById('m_unit');
+  const qtyInput = document.getElementById('m_qty');
+  const addBtn = document.getElementById('m_addbtn');
+  const stagedEl = document.getElementById('m_staged');
+  const submitBtn = document.getElementById('m_submit');
+  let selectedRow = null;
+
+  siteSel.addEventListener('change', ()=>{ targetSiteId = siteSel.value; });
+
+  inBtn.addEventListener('click', ()=>{ movementType='IN'; inBtn.className='active-in'; outBtn.className=''; });
+  outBtn.addEventListener('click', ()=>{ movementType='OUT'; outBtn.className='active-out'; inBtn.className=''; });
+
+  function resetItemFields(){
+    catSel.value = '';
+    matSel.innerHTML = '<option value="">Select category first…</option>'; matSel.disabled = true;
+    sizeSel.innerHTML = '<option value="">Select material first…</option>'; sizeSel.disabled = true;
+    unitInput.value = '—';
+    qtyInput.value = '';
+    selectedRow = null;
+    addBtn.disabled = true;
+  }
+
+  catSel.addEventListener('change', ()=>{
+    const cat = catSel.value;
+    selectedRow = null; addBtn.disabled = true; unitInput.value = '—';
+    if(!cat){ matSel.innerHTML = '<option value="">Select category first…</option>'; matSel.disabled = true; sizeSel.innerHTML = '<option value="">Select material first…</option>'; sizeSel.disabled = true; return; }
+    const materials = [...new Set(catalog.filter(c=>c.category===cat).map(c=>c.material).filter(Boolean))].sort();
+    matSel.innerHTML = '<option value="">Select material…</option>' + materials.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+    matSel.disabled = false;
+    sizeSel.innerHTML = '<option value="">Select material first…</option>'; sizeSel.disabled = true;
+  });
+
+  matSel.addEventListener('change', ()=>{
+    const cat = catSel.value, mat = matSel.value;
+    selectedRow = null; addBtn.disabled = true; unitInput.value = '—';
+    if(!mat){ sizeSel.innerHTML = '<option value="">Select material first…</option>'; sizeSel.disabled = true; return; }
+    const rows = catalog.filter(c=>c.category===cat && c.material===mat);
+    sizeSel.innerHTML = '<option value="">Select SKU…</option>' + rows.map(r=>`<option value="${escapeHtml(r.sku)}">${escapeHtml(r.sku)} · ${escapeHtml(r.size||'Standard')}</option>`).join('');
+    sizeSel.disabled = false;
+  });
+
+  sizeSel.addEventListener('change', ()=>{
+    const sku = sizeSel.value;
+    selectedRow = catalog.find(c=>c.sku===sku) || null;
+    if(selectedRow){
+      unitInput.value = selectedRow.unit || '—';
+      addBtn.disabled = false;
+    } else {
+      unitInput.value = '—';
+      addBtn.disabled = true;
+    }
+  });
+
+  function renderStaged(){
+    if(staged.length === 0){
+      stagedEl.innerHTML = '<div class="empty">No items added yet</div>';
+      submitBtn.disabled = true;
+      return;
+    }
+    stagedEl.innerHTML = staged.map((s,i) => `
+      <div class="stagerow">
+        <div class="si">${escapeHtml(s.material)}<small>${escapeHtml(s.sku)} · ${escapeHtml(s.size||'')}</small></div>
+        <span class="sq">${s.qty} ${escapeHtml(s.unit||'')}</span>
+        <button class="rm" data-i="${i}" title="Remove">×</button>
+      </div>
+    `).join('');
+    stagedEl.querySelectorAll('.rm').forEach(b=>b.addEventListener('click', ()=>{
+      staged.splice(Number(b.dataset.i), 1);
+      renderStaged();
+    }));
+    submitBtn.disabled = false;
+  }
+
+  addBtn.addEventListener('click', ()=>{
+    const qty = Number(qtyInput.value);
+    if(!selectedRow || !qty || qty <= 0){ toast('Pick an item and enter a quantity'); return; }
+    staged.push({ sku:selectedRow.sku, category:selectedRow.category, material:selectedRow.material, size:selectedRow.size, unit:selectedRow.unit, qty });
+    renderStaged();
+    resetItemFields();
+  });
+
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+  document.getElementById('m_cancel').addEventListener('click', ()=>overlay.remove());
+
+  submitBtn.addEventListener('click', async ()=>{
+    if(staged.length === 0) return;
+    submitBtn.disabled = true; submitBtn.textContent = 'Saving…';
+    const { breached } = await applyMovement(targetSiteId, movementType, staged);
+    overlay.remove();
+    if(targetSiteId !== activeSiteId){
+      selectSite(targetSiteId);
+    } else {
+      renderSiteList();
+      renderMain();
+    }
+    if(breached.length > 0){
+      toast(`Saved. ⚠ Out of range: ${breached.slice(0,3).join(', ')}${breached.length>3?` +${breached.length-3} more`:''}`);
+    } else {
+      toast(`${staged.length} item${staged.length===1?'':'s'} recorded as ${movementType}`);
+    }
+  });
+}
+
+/* ---------- movement history ---------- */
+
+/* ---------- daily activity report (admin) ---------- */
+
+function dateKey(ts){
+  const d = new Date(ts);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+async function openReportModal(){
+  let windowSize = 14;
+  let endDate = new Date();
+  endDate.setHours(0,0,0,0);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal report">
+      <h3>Daily activity report</h3>
+      <p class="modalsub">Movements recorded per site. 0 means no IN/OUT that day.</p>
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+        <button class="btn" id="r_prev">◀ Previous</button>
+        <button class="btn" id="r_today">Today</button>
+        <button class="btn" id="r_next">Next ▶</button>
+        <select id="r_window" style="margin-left:auto;">
+          <option value="7">7 days</option>
+          <option value="14" selected>14 days</option>
+          <option value="30">30 days</option>
+        </select>
+      </div>
+      <p class="hint" id="r_rangelabel" style="margin-bottom:8px;"></p>
+      <div class="reportwrap" id="reportTableWrap"><div class="loading">Loading activity across sites…</div></div>
+      <div class="modalbtns">
+        <button class="btn" id="r_close">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+  document.getElementById('r_close').addEventListener('click', ()=>overlay.remove());
+
+  async function renderReportTable(){
+    const wrap = document.getElementById('reportTableWrap');
+    wrap.innerHTML = '<div class="loading">Loading activity across sites…</div>';
+
+    const days = [];
+    for(let i = windowSize - 1; i >= 0; i--){
+      const d = new Date(endDate);
+      d.setDate(d.getDate() - i);
+      days.push({ key: dateKey(d.getTime()), label: d.toLocaleDateString(undefined, { day:'2-digit', month:'short' }) });
+    }
+    const todayKey = dateKey(Date.now());
+    const rangeLabel = document.getElementById('r_rangelabel');
+    if(rangeLabel) rangeLabel.textContent = `${days[0].label} — ${days[days.length-1].label}`;
+
+    const matrix = {};
+    const alerts = {};
+    for(const s of sites){
+      const log = await loadLog(s.id);
+      const cell = {};
+      days.forEach(d => cell[d.key] = { inQty: 0, outQty: 0, inNames: new Set(), outNames: new Set() });
+      log.forEach(l => {
+        const k = dateKey(l.at);
+        if(!cell[k]) return;
+        const who = l.by || 'Unknown';
+        if(l.type === 'IN'){ cell[k].inQty += Number(l.qty)||0; cell[k].inNames.add(who); }
+        else{ cell[k].outQty += Number(l.qty)||0; cell[k].outNames.add(who); }
+      });
+      matrix[s.id] = cell;
+      const items = await loadItems(s.id);
+      alerts[s.id] = { low: items.filter(it => stockStatus(it).label === 'Low').length };
+    }
+
+    if(!document.getElementById('reportTableWrap')) return;
+    wrap.innerHTML = `
+      <table class="reporttable">
+        <thead>
+          <tr>
+            <th class="sitecell" rowspan="2">Site</th>
+            <th rowspan="2">Low stock</th>
+            ${days.map(d=>`<th colspan="2" class="${d.key===todayKey?'today':''}">${d.label}</th>`).join('')}
+          </tr>
+          <tr>
+            ${days.map(d=>`<th class="subhead ${d.key===todayKey?'today':''}">IN</th><th class="subhead ${d.key===todayKey?'today':''}">OUT</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${sites.map(s => `
+            <tr>
+              <td class="sitecell">${escapeHtml(s.name)}</td>
+              <td>${alerts[s.id].low > 0 ? `<span class="daycell alertcount">${alerts[s.id].low}</span>` : `<span class="daycell active">0</span>`}</td>
+              ${days.map(d => {
+                const c = matrix[s.id][d.key];
+                const inNames = [...c.inNames].join(', ');
+                const outNames = [...c.outNames].join(', ');
+                return `<td class="${d.key===todayKey?'today':''}">${c.inQty>0 ? `<span class="daycell active">${c.inQty}</span><span class="doername">${escapeHtml(inNames)}</span>` : `<span class="daycell inactive">—</span>`}</td>`
+                     + `<td class="${d.key===todayKey?'today':''}">${c.outQty>0 ? `<span class="daycell alertcount">${c.outQty}</span><span class="doername">${escapeHtml(outNames)}</span>` : `<span class="daycell inactive">—</span>`}</td>`;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  document.getElementById('r_prev').addEventListener('click', ()=>{
+    endDate.setDate(endDate.getDate() - windowSize);
+    renderReportTable();
+  });
+  document.getElementById('r_next').addEventListener('click', ()=>{
+    const proposed = new Date(endDate);
+    proposed.setDate(proposed.getDate() + windowSize);
+    const now = new Date(); now.setHours(0,0,0,0);
+    endDate = proposed > now ? now : proposed;
+    renderReportTable();
+  });
+  document.getElementById('r_today').addEventListener('click', ()=>{
+    endDate = new Date(); endDate.setHours(0,0,0,0);
+    renderReportTable();
+  });
+  document.getElementById('r_window').addEventListener('change', (e)=>{
+    windowSize = Number(e.target.value);
+    renderReportTable();
+  });
+
+  renderReportTable();
+}
+
+document.getElementById('reportBtn').addEventListener('click', ()=>openReportModal());
+
+async function openHistoryModal(){
+  const site = sites.find(s=>s.id===activeSiteId);
+  if(!site) return;
+  const log = await loadLog(activeSiteId);
+  const sorted = [...log].sort((a,b)=>b.at-a.at);
+
+  const byPerson = {};
+  log.forEach(l => {
+    const name = l.by || 'Unknown';
+    if(!byPerson[name]) byPerson[name] = { in: 0, out: 0, last: 0, moves: 0 };
+    if(l.type === 'IN') byPerson[name].in += Number(l.qty)||0; else byPerson[name].out += Number(l.qty)||0;
+    byPerson[name].moves += 1;
+    byPerson[name].last = Math.max(byPerson[name].last, l.at);
+  });
+  const people = Object.entries(byPerson).sort((a,b)=>b[1].last-a[1].last);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal wide">
+      <h3>Movement history</h3>
+      <p class="modalsub">${escapeHtml(site.name)} — most recent first</p>
+      ${people.length > 0 ? `
+      <div class="sectionlabel" style="margin-top:0;">Who's active</div>
+      <div style="max-height:140px; overflow-y:auto; margin-bottom:10px;">
+        ${people.map(([name, d]) => `
+          <div class="logrow">
+            <span class="lname">${escapeHtml(name)}<small>${d.moves} movement${d.moves===1?'':'s'} · last ${escapeHtml(new Date(d.last).toLocaleString())}</small></span>
+            <span class="lqty" style="color:var(--olive);">IN ${d.in}</span>
+            <span class="lqty" style="color:var(--red);">OUT ${d.out}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="sectionlabel">All movements</div>
+      ` : ''}
+      <div style="max-height:340px; overflow-y:auto;">
+        ${sorted.length === 0
+          ? '<div class="tableempty">No IN/OUT movements recorded yet for this site.</div>'
+          : sorted.map(l => `
+            <div class="logrow">
+              <span class="logbadge ${l.type==='IN'?'in':'out'}">${l.type}</span>
+              <span class="lname">${escapeHtml(l.material)}<small>${escapeHtml(l.sku)} · ${escapeHtml(l.size||'')} · by ${escapeHtml(l.by||'Unknown')}</small></span>
+              <span class="lqty">${l.qty} ${escapeHtml(l.unit||'')}</span>
+              <span class="ldate">${escapeHtml(new Date(l.at).toLocaleString())}</span>
+            </div>
+          `).join('')}
+      </div>
+      <div class="modalbtns">
+        <button class="btn" id="h_close">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+  document.getElementById('h_close').addEventListener('click', ()=>overlay.remove());
+}
+
+/* ---------- auth / login gate ---------- */
+
+function applyRoleVisibility(){
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  document.getElementById('settingsBtn').style.display = isAdmin ? '' : 'none';
+  document.getElementById('reportBtn').style.display = isAdmin ? '' : 'none';
+  document.getElementById('newsiteRow').style.display = isAdmin ? '' : 'none';
+}
+
+async function startApp(){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  applyRoleVisibility();
+
+  await loadCatalogFromStorage();
+  if(catalog.length === 0){
+    try{
+      const rows = normalizeRows(parseCSV(SEED_CATALOG_TSV, '\t'));
+      if(rows.length > 0){
+        await saveCatalog(rows);
+        sourceMeta = { url: '', lastSynced: Date.now() };
+        await saveSourceMeta();
+      }
+    }catch(e){}
+  }
+  renderCatalogPill();
+  renderSiteList();
+  const visibleSites = currentUser.role === 'site' ? sites.filter(s=>s.id===currentUser.siteId) : sites;
+  for(const s of visibleSites){
+    await loadItems(s.id);
+  }
+  renderSiteList();
+  if(currentUser.role === 'site'){
+    selectSite(currentUser.siteId);
+  } else if(sites.length > 0){
+    selectSite(sites[0].id);
+  }
+}
+
+function showLogin(){
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  currentUser = null;
+  activeSiteId = null;
+
+  const siteSel = document.getElementById('login_site');
+  siteSel.innerHTML = sites.length === 0
+    ? '<option value="">No sites yet — ask admin to add one</option>'
+    : sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  document.getElementById('login_pin').value = '';
+  document.getElementById('login_name').value = '';
+  document.getElementById('loginSiteHint').textContent = '';
+
+  const adminLabel = document.getElementById('adminPassLabel');
+  const adminInput = document.getElementById('login_admin_pass');
+  const adminBtn = document.getElementById('loginAdminBtn');
+  adminInput.value = '';
+  document.getElementById('login_admin_name').value = '';
+  document.getElementById('loginAdminHint').textContent = '';
+  if(!adminPass){
+    adminLabel.textContent = 'Set a new admin password (first time setup)';
+    adminBtn.textContent = 'Create password and continue';
+  } else {
+    adminLabel.textContent = 'Admin password';
+    adminBtn.textContent = 'Continue';
+  }
+}
+
+document.getElementById('loginTabSite').addEventListener('click', ()=>{
+  document.getElementById('loginTabSite').classList.add('active');
+  document.getElementById('loginTabAdmin').classList.remove('active');
+  document.getElementById('loginSitePane').style.display = 'block';
+  document.getElementById('loginAdminPane').style.display = 'none';
+});
+document.getElementById('loginTabAdmin').addEventListener('click', ()=>{
+  document.getElementById('loginTabAdmin').classList.add('active');
+  document.getElementById('loginTabSite').classList.remove('active');
+  document.getElementById('loginAdminPane').style.display = 'block';
+  document.getElementById('loginSitePane').style.display = 'none';
+});
+
+document.getElementById('loginSiteBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('login_name').value.trim();
+  const siteId = document.getElementById('login_site').value;
+  const pin = document.getElementById('login_pin').value.trim();
+  const hint = document.getElementById('loginSiteHint');
+  if(!name){ hint.textContent = 'Enter your name first.'; return; }
+  const site = sites.find(s=>s.id===siteId);
+  if(!site){ hint.textContent = 'Pick a site first.'; return; }
+  if(!pin){ hint.textContent = 'Enter the PIN for this site.'; return; }
+  if(site.pin !== pin){ hint.textContent = 'Wrong PIN — check with your admin.'; return; }
+  currentUser = { role: 'site', siteId, actorName: name };
+  await startApp();
+});
+document.getElementById('login_pin').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginSiteBtn').click(); });
+
+document.getElementById('loginAdminBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('login_admin_name').value.trim() || 'Admin';
+  const val = document.getElementById('login_admin_pass').value;
+  const hint = document.getElementById('loginAdminHint');
+  if(!val || val.length < 4){ hint.textContent = 'Use at least 4 characters.'; return; }
+  if(!adminPass){
+    await saveAdminPass(val);
+    currentUser = { role: 'admin', actorName: name };
+    await startApp();
+  } else {
+    if(val !== adminPass){ hint.textContent = 'Wrong password.'; return; }
+    currentUser = { role: 'admin', actorName: name };
+    await startApp();
+  }
+});
+document.getElementById('login_admin_pass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginAdminBtn').click(); });
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  showLogin();
+});
+
+/* ---------- init ---------- */
+
+(async function init(){
+  await loadSites();
+  await loadAdminPass();
+  for(const s of sites){
+    await loadItems(s.id);
+  }
+  showLogin();
+})();
+</script>
+
+</body>
+</html>
