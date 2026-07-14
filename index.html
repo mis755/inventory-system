@@ -105,6 +105,7 @@
   .field textarea{font-family:'IBM Plex Mono',monospace;font-size:11.5px;resize:vertical;min-height:90px;}
   .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--orange);background:var(--card);}
   .field input:disabled, .field select:disabled{opacity:.5;cursor:not-allowed;}
+  .namepreview{background:var(--blue-tint);border:1px solid var(--blue);border-radius:4px;padding:9px 12px;font-weight:600;font-size:14px;color:var(--blue-deep);}
   .readonlybox{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:12.5px;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-bottom:12px;}
   .readonlybox div span{display:block;color:var(--ink-soft);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;}
   .readonlybox div b{font-family:'IBM Plex Mono',monospace;font-size:13px;}
@@ -187,16 +188,16 @@
     </div>
     <div id="loginSitePane">
       <div class="field">
-        <label>Your name</label>
-        <input type="text" id="login_name" placeholder="e.g. Ramesh">
-      </div>
-      <div class="field">
         <label>Site code</label>
         <select id="login_site"><option value="">Loading sites…</option></select>
       </div>
+      <div class="field" id="loginNameField" style="display:none;">
+        <label>Logging in as</label>
+        <div class="namepreview" id="loginNamePreview">—</div>
+      </div>
       <div class="field">
-        <label>PIN</label>
-        <input type="password" id="login_pin" placeholder="4-6 digit PIN" inputmode="numeric">
+        <label>Password</label>
+        <input type="password" id="login_pin" placeholder="Password">
       </div>
       <button class="btn primary" id="loginSiteBtn" style="width:100%;">Enter site</button>
       <p class="hint" id="loginSiteHint"></p>
@@ -230,7 +231,8 @@
     <div class="catalogpill" id="catalogPill">Loading master data…</div>
     <div class="newsite" id="newsiteRow">
       <input type="text" id="newSiteInput" placeholder="Site code">
-      <input type="text" id="newSitePin" placeholder="PIN" style="max-width:66px;">
+      <input type="text" id="newSiteName" placeholder="Person's name">
+      <input type="text" id="newSitePin" placeholder="Password" style="max-width:80px;">
       <button id="newSiteBtn" title="Add site">+</button>
     </div>
     <div class="railtitle">All sites</div>
@@ -762,30 +764,35 @@ async function deleteSite(id){
 }
 
 document.getElementById('newSiteBtn').addEventListener('click', addSite);
-document.getElementById('newSiteInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('newSitePin').focus(); });
+document.getElementById('newSiteInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('newSiteName').focus(); });
+document.getElementById('newSiteName').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('newSitePin').focus(); });
 document.getElementById('newSitePin').addEventListener('keydown', (e)=>{ if(e.key==='Enter') addSite(); });
 
 async function addSite(){
   const input = document.getElementById('newSiteInput');
+  const nameInput = document.getElementById('newSiteName');
   const pinInput = document.getElementById('newSitePin');
   const name = input.value.trim();
+  const assignedName = nameInput.value.trim();
   const pin = pinInput.value.trim();
   if(!name){ toast('Enter a site code'); return; }
-  if(!pin || pin.length < 4){ toast('Set a PIN (at least 4 digits) for this site'); return; }
+  if(!assignedName){ toast('Enter the person\u2019s name for this site'); return; }
+  if(!pin || pin.length < 4){ toast('Set a password (at least 4 characters)'); return; }
   if(sites.some(s=>s.name.toLowerCase() === name.toLowerCase())){ toast('A site with this code already exists'); return; }
   const addBtn = document.getElementById('newSiteBtn');
   addBtn.disabled = true;
   try{
-    const res = await apiPost('addSite', { name, pin });
+    const res = await apiPost('addSite', { name, pin, assignedName });
     const site = res.site;
     sites.push(site);
     itemsCache[site.id] = [];
     logCache[site.id] = [];
     input.value = '';
+    nameInput.value = '';
     pinInput.value = '';
     renderSiteList();
     selectSite(site.id);
-    toast('Site added — share the PIN with that site\u2019s team');
+    toast(`Site added — share the password with ${assignedName}`);
   }catch(e){
     toast('⚠ ' + e.message);
   }finally{
@@ -1615,9 +1622,10 @@ function showLogin(){
   const siteSel = document.getElementById('login_site');
   siteSel.innerHTML = sites.length === 0
     ? '<option value="">No sites yet — ask admin to add one</option>'
-    : sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    : '<option value="">Select your site…</option>' + sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
   document.getElementById('login_pin').value = '';
-  document.getElementById('login_name').value = '';
+  document.getElementById('loginNameField').style.display = 'none';
+  document.getElementById('loginNamePreview').textContent = '—';
   document.getElementById('loginSiteHint').textContent = '';
 
   const adminLabel = document.getElementById('adminPassLabel');
@@ -1648,17 +1656,28 @@ document.getElementById('loginTabAdmin').addEventListener('click', ()=>{
   document.getElementById('loginSitePane').style.display = 'none';
 });
 
+document.getElementById('login_site').addEventListener('change', ()=>{
+  const siteId = document.getElementById('login_site').value;
+  const site = sites.find(s=>s.id===siteId);
+  const field = document.getElementById('loginNameField');
+  const preview = document.getElementById('loginNamePreview');
+  if(site && site.assignedName){
+    preview.textContent = site.assignedName;
+    field.style.display = '';
+  } else {
+    field.style.display = 'none';
+  }
+});
+
 document.getElementById('loginSiteBtn').addEventListener('click', async ()=>{
-  const name = document.getElementById('login_name').value.trim();
   const siteId = document.getElementById('login_site').value;
   const pin = document.getElementById('login_pin').value.trim();
   const hint = document.getElementById('loginSiteHint');
-  if(!name){ hint.textContent = 'Enter your name first.'; return; }
   const site = sites.find(s=>s.id===siteId);
   if(!site){ hint.textContent = 'Pick a site first.'; return; }
-  if(!pin){ hint.textContent = 'Enter the PIN for this site.'; return; }
-  if(String(site.pin) !== String(pin)){ hint.textContent = 'Wrong PIN — check with your admin.'; return; }
-  currentUser = { role: 'site', siteId, actorName: name };
+  if(!pin){ hint.textContent = 'Enter the password.'; return; }
+  if(String(site.pin) !== String(pin)){ hint.textContent = 'Wrong password — check with your admin.'; return; }
+  currentUser = { role: 'site', siteId, actorName: site.assignedName || site.name };
   await startApp();
 });
 document.getElementById('login_pin').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginSiteBtn').click(); });
