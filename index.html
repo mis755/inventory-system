@@ -249,6 +249,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <script>
 const firebaseConfig = {
@@ -262,6 +263,16 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const rtdb = firebase.database();
+
+// Anonymous auth so the Realtime Database rules can require auth != null
+// (Firebase Console → Authentication → Sign-in method → Anonymous must be Enabled).
+// Everything that reads/writes rtdb should wait on this promise first.
+const authReady = new Promise((resolve, reject) => {
+  firebase.auth().onAuthStateChanged(user => {
+    if (user) resolve(user);
+  });
+  firebase.auth().signInAnonymously().catch(reject);
+});
 </script>
 <script>
 /* ============================================================
@@ -270,7 +281,7 @@ const rtdb = firebase.database();
    See Code.gs setup instructions for how to get this.
    ============================================================ */
 const CONFIG = {
-  API_URL: "https://script.google.com/macros/s/AKfycbz54UtCj1dNyIw7c5ctdU5D9Uimhl8pBNBQL6-Mep2y26ukoKyQOUoMwiKHnLr0LenCQg/exec"
+  API_URL: "https://script.google.com/macros/s/AKfycbxILa2hHeF7pga04tF32tcXZ62lDygqcoumbeNRy_9iAytSjwixcXTMiJFEY35DSlpnbA/exec"
 };
 
 function apiReady(){
@@ -577,6 +588,7 @@ async function saveLog(siteId, log){
    plus the live catalog (still read from the Material_Master Google
    Sheet through the lightweight Apps Script endpoint) ---------- */
 async function apiBootstrap(){
+  await authReady;
   const [sitesSnap, itemsSnap, logSnap, adminPassSnap, catalogData] = await Promise.all([
     rtdb.ref('sites').once('value'),
     rtdb.ref('items').once('value'),
