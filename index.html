@@ -122,6 +122,8 @@
   .tabs button.active{background:var(--ink);color:var(--paper);}
   .syncrow{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--ink-soft);margin:-4px 0 14px;}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80%;text-align:center;}
+  .syncwarning{display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;padding:10px 14px;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;z-index:61;align-items:center;gap:12px;box-shadow:0 4px 14px rgba(0,0,0,.2);max-width:90%;}
+  .syncwarning button{background:#fff;color:var(--red);border:none;border-radius:4px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
   .toast.show{opacity:1;}
   .loading{padding:40px;text-align:center;color:var(--ink-soft);font-size:13px;}
   .hint{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin:6px 0 0;}
@@ -173,6 +175,9 @@
   .daycell.alertcount{color:var(--red);background:var(--red-tint);padding:2px 8px;border-radius:10px;}
   .reporttable th.subhead{font-size:9.5px;background:var(--paper);color:var(--ink-soft);}
   .doername{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:9.5px;color:var(--ink-soft);white-space:normal;max-width:80px;margin:2px auto 0;line-height:1.3;}
+  .daycell.doername{font-size:11.5px;max-width:100px;margin:0 auto;color:inherit;}
+  .daycell.alertcount.doername{background:none;padding:0;border-radius:0;color:var(--red);}
+  .daycell.active.doername{color:var(--olive);}
   ::placeholder{color:#A8A499;}
 </style>
 </head>
@@ -249,7 +254,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <script>
 const firebaseConfig = {
@@ -263,16 +267,6 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const rtdb = firebase.database();
-
-// Anonymous auth so the Realtime Database rules can require auth != null
-// (Firebase Console → Authentication → Sign-in method → Anonymous must be Enabled).
-// Everything that reads/writes rtdb should wait on this promise first.
-const authReady = new Promise((resolve, reject) => {
-  firebase.auth().onAuthStateChanged(user => {
-    if (user) resolve(user);
-  });
-  firebase.auth().signInAnonymously().catch(reject);
-});
 </script>
 <script>
 /* ============================================================
@@ -588,7 +582,6 @@ async function saveLog(siteId, log){
    plus the live catalog (still read from the Material_Master Google
    Sheet through the lightweight Apps Script endpoint) ---------- */
 async function apiBootstrap(){
-  await authReady;
   const [sitesSnap, itemsSnap, logSnap, adminPassSnap, catalogData] = await Promise.all([
     rtdb.ref('sites').once('value'),
     rtdb.ref('items').once('value'),
@@ -752,7 +745,7 @@ document.getElementById('settingsBtn').addEventListener('click', openSettingsMod
 
 function renderSiteList(){
   const el = document.getElementById('siteList');
-  const visibleSites = currentUser && currentUser.role === 'site' ? sites.filter(s=>(currentUser.siteIds||[currentUser.siteId]).includes(s.id)) : sites;
+  const visibleSites = currentUser && currentUser.role === 'site' ? sites.filter(s=>s.id===currentUser.siteId) : sites;
   if(visibleSites.length === 0){
     el.innerHTML = '<div class="empty-rail">No sites yet. Add your first site above — every site gets its own stock list.</div>';
     return;
@@ -866,9 +859,6 @@ function renderMain(){
   const lowItems = items.filter(it => stockStatus(it).label === 'Low');
   const overItems = items.filter(it => stockStatus(it).label === 'Over');
 
-  const mySites = currentUser && currentUser.role === 'site' ? sites.filter(s=>(currentUser.siteIds||[currentUser.siteId]).includes(s.id)) : [];
-  const showSiteSwitcher = mySites.length > 1;
-
   const main = document.getElementById('main');
   main.innerHTML = `
     <div class="header">
@@ -876,13 +866,6 @@ function renderMain(){
         <div class="htitle">${escapeHtml(site.name)}</div>
         <div class="hsub">${items.length} item type${items.length===1?'':'s'} · ${totalQty} total units</div>
       </div>
-      ${showSiteSwitcher ? `
-      <div class="field" style="margin:0; min-width:180px;">
-        <label>Switch site</label>
-        <select id="mySiteSwitcher">
-          ${mySites.map(s=>`<option value="${s.id}" ${s.id===activeSiteId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
-        </select>
-      </div>` : ''}
     </div>
     ${(lowItems.length || overItems.length) ? `
     <div class="alertbanner">
@@ -953,8 +936,6 @@ function renderMain(){
   const moveBtn = document.getElementById('movementBtn');
   if(moveBtn && !moveBtn.disabled) moveBtn.addEventListener('click', ()=>openMovementModal());
   document.getElementById('historyBtn').addEventListener('click', ()=>openHistoryModal());
-  const switcher = document.getElementById('mySiteSwitcher');
-  if(switcher) switcher.addEventListener('change', ()=>selectSite(switcher.value));
   body.querySelectorAll('.quickin').forEach(b=>b.addEventListener('click', ()=>{
     const it = items.find(x=>x.id===b.dataset.id);
     if(it) openQuickMoveModal(it, 'IN');
@@ -1209,36 +1190,138 @@ async function persistMovement(siteId, stagedList, movementType, logEntries){
     const localItem = (itemsCache[siteId] || []).find(i => i.sku === s.sku);
     const itemId = localItem ? localItem.id : uid();
     const cat = catalog.find(c => c.sku === s.sku);
-    let transitioned = false, transitionStatus = '';
+    const transitionRef = {};
     try{
-      const result = await rtdb.ref('items/' + siteId + '/' + itemId).transaction(current => {
-        if(current === null){
-          const fresh = { sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit,
-            qty: delta, min: cat && cat.min != null ? cat.min : null, max: cat && cat.max != null ? cat.max : null,
-            addedAt: Date.now(), alertState: '' };
-          const status = stockStatus(fresh).label;
-          fresh.alertState = (status === 'Low' || status === 'Over') ? status : '';
-          transitioned = !!fresh.alertState;
-          transitionStatus = fresh.alertState;
-          return fresh;
-        }
-        const prevAlertState = current.alertState || '';
-        const newQty = (Number(current.qty) || 0) + delta;
-        const status = stockStatus({ qty: newQty, min: current.min, max: current.max }).label;
-        const nextAlertState = (status === 'Low' || status === 'Over') ? status : '';
-        transitioned = !!nextAlertState && nextAlertState !== prevAlertState;
-        transitionStatus = nextAlertState;
-        current.qty = newQty;
-        current.alertState = nextAlertState;
-        return current;
-      });
-      if(result.committed && transitioned){
+      const result = await syncItemWithRetry(siteId, itemId, delta, cat, s, transitionRef, 1);
+      if(result.committed && transitionRef.transitioned){
         const val = result.snapshot.val();
-        apiPost('sendAlertEmail', { alerts: [{ material: val.material, sku: val.sku, qty: val.qty, min: val.min, max: val.max, status: transitionStatus, siteName: (sites.find(x=>x.id===siteId)||{}).name || siteId }] }).catch(()=>{});
+        apiPost('sendAlertEmail', { alerts: [{ material: val.material, sku: val.sku, qty: val.qty, min: val.min, max: val.max, status: transitionRef.status, siteName: (sites.find(x=>x.id===siteId)||{}).name || siteId }] }).catch(()=>{});
       }
-    }catch(e){ toast('⚠ Could not sync ' + s.material + ' to server'); }
+    }catch(e){
+      // 3 attempts already failed (see syncItemWithRetry) — park it so it
+      // isn't silently lost; retried automatically on reconnect, or via the
+      // sticky banner's "Retry now" button.
+      queuePendingSync({ siteId, itemId, delta, cat, s });
+      toast('⚠ ' + s.material + ' not saved yet — will retry automatically');
+    }
   }
 }
+
+/* ---------- resilient item sync (retry + offline/reconnect queue) ----------
+   Movement LOG writes use rtdb...update(), which the Firebase SDK queues
+   locally and flushes on reconnect even if offline at call time. Item STOCK
+   writes use a transaction() (needed for the concurrency-safety guarantee —
+   see Concurrency section), but a transaction requires a live round trip to
+   read the current value first, so it does NOT reliably queue while the
+   connection is still coming up (e.g. right after page load) — it can fail
+   silently. This wrapper adds automatic retries and, if those are exhausted,
+   parks the item in a persisted queue that is retried the moment Firebase
+   reports reconnection, with a sticky (non-auto-dismissing) banner so a
+   failure is never invisible the way a normal toast would be. ---------- */
+const PENDING_SYNC_KEY = 'ssl_pendingItemSync';
+
+function loadPendingSyncs(){
+  try{ return JSON.parse(localStorage.getItem(PENDING_SYNC_KEY) || '[]'); }catch(e){ return []; }
+}
+function savePendingSyncs(list){
+  try{ localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(list)); }catch(e){}
+}
+function queuePendingSync(entry){
+  const list = loadPendingSyncs();
+  list.push(entry);
+  savePendingSyncs(list);
+  renderSyncWarning(list.length);
+}
+function removePendingSync(siteId, itemId){
+  let list = loadPendingSyncs().filter(e => !(e.siteId === siteId && e.itemId === itemId));
+  savePendingSyncs(list);
+  renderSyncWarning(list.length);
+}
+
+let syncWarningEl = null;
+function renderSyncWarning(count){
+  if(count <= 0){
+    if(syncWarningEl) syncWarningEl.style.display = 'none';
+    return;
+  }
+  if(!syncWarningEl){
+    syncWarningEl = document.createElement('div');
+    syncWarningEl.className = 'syncwarning';
+    syncWarningEl.innerHTML = `<span id="syncwarningtext"></span><button id="syncretrybtn">Retry now</button>`;
+    document.body.appendChild(syncWarningEl);
+    syncWarningEl.querySelector('#syncretrybtn').addEventListener('click', ()=>flushPendingSyncs(true));
+  }
+  syncWarningEl.querySelector('#syncwarningtext').textContent = `⚠ ${count} item${count===1?'':'s'} not saved to server yet — will retry automatically`;
+  syncWarningEl.style.display = 'flex';
+}
+
+async function itemTransactionOnce(siteId, itemId, delta, cat, s, transitionRef){
+  const result = await rtdb.ref('items/' + siteId + '/' + itemId).transaction(current => {
+    if(current === null){
+      const fresh = { sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit,
+        qty: delta, min: cat && cat.min != null ? cat.min : null, max: cat && cat.max != null ? cat.max : null,
+        addedAt: Date.now(), alertState: '' };
+      const status = stockStatus(fresh).label;
+      fresh.alertState = (status === 'Low' || status === 'Over') ? status : '';
+      if(transitionRef){ transitionRef.transitioned = !!fresh.alertState; transitionRef.status = fresh.alertState; }
+      return fresh;
+    }
+    const prevAlertState = current.alertState || '';
+    const newQty = (Number(current.qty) || 0) + delta;
+    const status = stockStatus({ qty: newQty, min: current.min, max: current.max }).label;
+    const nextAlertState = (status === 'Low' || status === 'Over') ? status : '';
+    current.qty = newQty;
+    current.alertState = nextAlertState;
+    if(transitionRef){ transitionRef.transitioned = !!nextAlertState && nextAlertState !== prevAlertState; transitionRef.status = nextAlertState; }
+    return current;
+  });
+  if(!result.committed) throw new Error('transaction not committed');
+  return result;
+}
+
+async function syncItemWithRetry(siteId, itemId, delta, cat, s, transitionRef, attempt){
+  attempt = attempt || 1;
+  try{
+    return await itemTransactionOnce(siteId, itemId, delta, cat, s, transitionRef);
+  }catch(e){
+    if(attempt < 3){
+      await new Promise(r => setTimeout(r, attempt * 700));
+      return syncItemWithRetry(siteId, itemId, delta, cat, s, transitionRef, attempt + 1);
+    }
+    throw e;
+  }
+}
+
+// Retries everything currently parked in the pending queue (called on
+// reconnect and via the banner's "Retry now" button). Safe to call anytime,
+// including with an empty queue.
+let flushingPendingSyncs = false;
+async function flushPendingSyncs(manual){
+  if(flushingPendingSyncs) return;
+  const list = loadPendingSyncs();
+  if(list.length === 0) return;
+  flushingPendingSyncs = true;
+  if(manual) toast('Retrying…');
+  for(const entry of list){
+    const transitionRef = {};
+    try{
+      const result = await syncItemWithRetry(entry.siteId, entry.itemId, entry.delta, entry.cat, entry.s, transitionRef, 1);
+      removePendingSync(entry.siteId, entry.itemId);
+      if(result.committed && transitionRef.transitioned){
+        const val = result.snapshot.val();
+        apiPost('sendAlertEmail', { alerts: [{ material: val.material, sku: val.sku, qty: val.qty, min: val.min, max: val.max, status: transitionRef.status, siteName: (sites.find(x=>x.id===entry.siteId)||{}).name || entry.siteId }] }).catch(()=>{});
+      }
+    }catch(e){
+      // still failing — leave it in the queue for the next reconnect/retry
+    }
+  }
+  flushingPendingSyncs = false;
+  renderSyncWarning(loadPendingSyncs().length);
+}
+
+rtdb.ref('.info/connected').on('value', (snap)=>{
+  if(snap.val() === true) flushPendingSyncs(false);
+});
 
 function openQuickMoveModal(item, defaultType){
   const overlay = document.createElement('div');
@@ -1296,8 +1379,8 @@ function openMovementModal(){
       <p class="modalsub">Record material received (IN) or issued (OUT) at site.</p>
       <div class="field">
         <label>Site</label>
-        <select id="m_site" ${currentUser && currentUser.role==='site' && (currentUser.siteIds||[currentUser.siteId]).length<=1 ? 'disabled' : ''}>
-          ${(currentUser && currentUser.role==='site' ? sites.filter(s=>(currentUser.siteIds||[currentUser.siteId]).includes(s.id)) : sites).map(s=>`<option value="${s.id}" ${s.id===targetSiteId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
+        <select id="m_site" ${currentUser && currentUser.role==='site' ? 'disabled' : ''}>
+          ${(currentUser && currentUser.role==='site' ? sites.filter(s=>s.id===currentUser.siteId) : sites).map(s=>`<option value="${s.id}" ${s.id===targetSiteId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
         </select>
       </div>
       <div class="movetoggle">
@@ -1467,7 +1550,7 @@ async function openReportModal(){
   overlay.innerHTML = `
     <div class="modal report">
       <h3>Daily activity report</h3>
-      <p class="modalsub">Movements recorded per site. 0 means no IN/OUT that day.</p>
+      <p class="modalsub">Who recorded movements per site, per day. — means no IN/OUT that day.</p>
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
         <button class="btn" id="r_prev">◀ Previous</button>
         <button class="btn" id="r_today">Today</button>
@@ -1543,8 +1626,8 @@ async function openReportModal(){
                 const c = matrix[s.id][d.key];
                 const inNames = [...c.inNames].join(', ');
                 const outNames = [...c.outNames].join(', ');
-                return `<td class="${d.key===todayKey?'today':''}">${c.inQty>0 ? `<span class="daycell active">${c.inQty}</span><span class="doername">${escapeHtml(inNames)}</span>` : `<span class="daycell inactive">—</span>`}</td>`
-                     + `<td class="${d.key===todayKey?'today':''}">${c.outQty>0 ? `<span class="daycell alertcount">${c.outQty}</span><span class="doername">${escapeHtml(outNames)}</span>` : `<span class="daycell inactive">—</span>`}</td>`;
+                return `<td class="${d.key===todayKey?'today':''}">${c.inQty>0 ? `<span class="daycell active doername">${escapeHtml(inNames)}</span>` : `<span class="daycell inactive">—</span>`}</td>`
+                     + `<td class="${d.key===todayKey?'today':''}">${c.outQty>0 ? `<span class="daycell alertcount doername">${escapeHtml(outNames)}</span>` : `<span class="daycell inactive">—</span>`}</td>`;
               }).join('')}
             </tr>
           `).join('')}
@@ -1719,7 +1802,7 @@ async function startApp(){
 
   renderCatalogPill();
   renderSiteList();
-  const visibleSites = currentUser.role === 'site' ? sites.filter(s=>(currentUser.siteIds||[currentUser.siteId]).includes(s.id)) : sites;
+  const visibleSites = currentUser.role === 'site' ? sites.filter(s=>s.id===currentUser.siteId) : sites;
   for(const s of visibleSites){
     await loadItems(s.id);
   }
@@ -1795,11 +1878,7 @@ document.getElementById('loginSiteBtn').addEventListener('click', async ()=>{
   if(!site){ hint.textContent = 'Pick a site first.'; return; }
   if(!pin){ hint.textContent = 'Enter the password.'; return; }
   if(String(site.pin) !== String(pin)){ hint.textContent = 'Wrong password — check with your admin.'; return; }
-  const myName = (site.assignedName || '').trim().toLowerCase();
-  const siteIds = myName
-    ? sites.filter(s => (s.assignedName || '').trim().toLowerCase() === myName).map(s => s.id)
-    : [site.id];
-  currentUser = { role: 'site', siteId, siteIds, actorName: site.assignedName || site.name };
+  currentUser = { role: 'site', siteId, actorName: site.assignedName || site.name };
   await startApp();
 });
 document.getElementById('login_pin').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginSiteBtn').click(); });
@@ -1849,6 +1928,7 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>{
     </div>`;
     return;
   }
+  renderSyncWarning(loadPendingSyncs().length);
   showLogin();
 })();
 </script>
