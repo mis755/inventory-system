@@ -752,7 +752,7 @@ document.getElementById('settingsBtn').addEventListener('click', openSettingsMod
 
 function renderSiteList(){
   const el = document.getElementById('siteList');
-  const visibleSites = currentUser && currentUser.role === 'site' ? sites.filter(s=>s.id===currentUser.siteId) : sites;
+  const visibleSites = currentUser && currentUser.role === 'site' ? sites.filter(s=>(currentUser.siteIds||[currentUser.siteId]).includes(s.id)) : sites;
   if(visibleSites.length === 0){
     el.innerHTML = '<div class="empty-rail">No sites yet. Add your first site above — every site gets its own stock list.</div>';
     return;
@@ -866,6 +866,9 @@ function renderMain(){
   const lowItems = items.filter(it => stockStatus(it).label === 'Low');
   const overItems = items.filter(it => stockStatus(it).label === 'Over');
 
+  const mySites = currentUser && currentUser.role === 'site' ? sites.filter(s=>(currentUser.siteIds||[currentUser.siteId]).includes(s.id)) : [];
+  const showSiteSwitcher = mySites.length > 1;
+
   const main = document.getElementById('main');
   main.innerHTML = `
     <div class="header">
@@ -873,6 +876,13 @@ function renderMain(){
         <div class="htitle">${escapeHtml(site.name)}</div>
         <div class="hsub">${items.length} item type${items.length===1?'':'s'} · ${totalQty} total units</div>
       </div>
+      ${showSiteSwitcher ? `
+      <div class="field" style="margin:0; min-width:180px;">
+        <label>Switch site</label>
+        <select id="mySiteSwitcher">
+          ${mySites.map(s=>`<option value="${s.id}" ${s.id===activeSiteId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
+        </select>
+      </div>` : ''}
     </div>
     ${(lowItems.length || overItems.length) ? `
     <div class="alertbanner">
@@ -943,6 +953,8 @@ function renderMain(){
   const moveBtn = document.getElementById('movementBtn');
   if(moveBtn && !moveBtn.disabled) moveBtn.addEventListener('click', ()=>openMovementModal());
   document.getElementById('historyBtn').addEventListener('click', ()=>openHistoryModal());
+  const switcher = document.getElementById('mySiteSwitcher');
+  if(switcher) switcher.addEventListener('change', ()=>selectSite(switcher.value));
   body.querySelectorAll('.quickin').forEach(b=>b.addEventListener('click', ()=>{
     const it = items.find(x=>x.id===b.dataset.id);
     if(it) openQuickMoveModal(it, 'IN');
@@ -1284,8 +1296,8 @@ function openMovementModal(){
       <p class="modalsub">Record material received (IN) or issued (OUT) at site.</p>
       <div class="field">
         <label>Site</label>
-        <select id="m_site" ${currentUser && currentUser.role==='site' ? 'disabled' : ''}>
-          ${(currentUser && currentUser.role==='site' ? sites.filter(s=>s.id===currentUser.siteId) : sites).map(s=>`<option value="${s.id}" ${s.id===targetSiteId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
+        <select id="m_site" ${currentUser && currentUser.role==='site' && (currentUser.siteIds||[currentUser.siteId]).length<=1 ? 'disabled' : ''}>
+          ${(currentUser && currentUser.role==='site' ? sites.filter(s=>(currentUser.siteIds||[currentUser.siteId]).includes(s.id)) : sites).map(s=>`<option value="${s.id}" ${s.id===targetSiteId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
         </select>
       </div>
       <div class="movetoggle">
@@ -1707,7 +1719,7 @@ async function startApp(){
 
   renderCatalogPill();
   renderSiteList();
-  const visibleSites = currentUser.role === 'site' ? sites.filter(s=>s.id===currentUser.siteId) : sites;
+  const visibleSites = currentUser.role === 'site' ? sites.filter(s=>(currentUser.siteIds||[currentUser.siteId]).includes(s.id)) : sites;
   for(const s of visibleSites){
     await loadItems(s.id);
   }
@@ -1783,7 +1795,11 @@ document.getElementById('loginSiteBtn').addEventListener('click', async ()=>{
   if(!site){ hint.textContent = 'Pick a site first.'; return; }
   if(!pin){ hint.textContent = 'Enter the password.'; return; }
   if(String(site.pin) !== String(pin)){ hint.textContent = 'Wrong password — check with your admin.'; return; }
-  currentUser = { role: 'site', siteId, actorName: site.assignedName || site.name };
+  const myName = (site.assignedName || '').trim().toLowerCase();
+  const siteIds = myName
+    ? sites.filter(s => (s.assignedName || '').trim().toLowerCase() === myName).map(s => s.id)
+    : [site.id];
+  currentUser = { role: 'site', siteId, siteIds, actorName: site.assignedName || site.name };
   await startApp();
 });
 document.getElementById('login_pin').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginSiteBtn').click(); });
