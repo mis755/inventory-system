@@ -184,6 +184,49 @@
   .daycell.alertcount.doername{background:none;padding:0;border-radius:0;color:var(--red);}
   .daycell.active.doername{color:var(--olive);}
   ::placeholder{color:#A8A499;}
+
+  /* ===== Mobile responsive (desktop layout untouched above ≥769px) ===== */
+  @media (max-width: 768px){
+    .app{flex-direction:column;min-height:100vh;}
+    .rail{width:100%;flex-shrink:1;border-right:none;border-bottom:1px solid var(--line-strong);padding:14px 12px;gap:10px;max-height:none;}
+    .brandrow{padding:0 2px;}
+    .brand{font-size:16px;}
+    .catalogpill{font-size:11px;padding:7px 9px;}
+    .newsite{padding:0;}
+    .railtitle{padding:0 2px;margin-top:2px;}
+    .sitelist{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;flex:none;padding-bottom:4px;-webkit-overflow-scrolling:touch;}
+    .sitetag{flex-shrink:0;min-width:120px;border-radius:5px;border-left:1px solid var(--line);border-top:4px solid var(--line-strong);padding:8px 10px;}
+    .sitetag.active{border-top-color:var(--blue);}
+    .sitetag .del{top:-6px;right:-6px;}
+
+    .main{padding:16px 14px;}
+    .main-empty{height:50vh;font-size:13px;padding:0 16px;}
+    .header{margin-bottom:16px;gap:10px;}
+    .htitle{font-size:20px;}
+    .hsub{font-size:11px;}
+    .toolbar{gap:8px;margin-bottom:14px;}
+    .toolbar input{min-width:0;width:100%;flex:1 1 100%;}
+    .toolbar select{flex:1 1 auto;}
+    .addbtn{flex:1 1 auto;}
+
+    .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:6px;}
+    table{min-width:640px;}
+    thead th, tbody td{padding:9px 10px;font-size:12.5px;}
+    .tablebar{padding:10px 12px;font-size:12px;}
+
+    .overlay{padding:0;align-items:flex-end;}
+    .modal{max-width:100%;width:100%;border-radius:14px 14px 0 0;padding:18px;max-height:92vh;overflow-y:auto;margin:0;}
+    .modal.wide{max-width:100%;}
+    .modal.report{max-width:100%;}
+    .modalrow{flex-direction:column;gap:0;}
+    .readonlybox{grid-template-columns:1fr 1fr;}
+
+    .logrow{flex-wrap:wrap;}
+    .logrow .ldate{width:auto;margin-left:auto;}
+
+    .logincard{padding:20px;max-width:100%;}
+    .toast{max-width:92%;font-size:12.5px;}
+  }
 </style>
 </head>
 <body>
