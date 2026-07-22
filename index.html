@@ -150,6 +150,11 @@
   .logrow .lname small{display:block;color:var(--ink-soft);font-weight:400;}
   .logrow .lqty{font-family:'IBM Plex Mono',monospace;font-weight:600;}
   .logrow .ldate{color:var(--ink-soft);font-size:11px;width:110px;text-align:right;flex-shrink:0;}
+  .proofthumb{width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--line-strong);cursor:pointer;flex-shrink:0;}
+  .proofpreviewwrap{display:flex;align-items:center;gap:10px;margin-top:8px;}
+  .proofpreviewwrap img{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--line-strong);}
+  .logrow .logdel{border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:14px;padding:2px 6px;flex-shrink:0;}
+  .logrow .logdel:hover{color:var(--red);}
   .loginscreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--paper);padding:20px;}
   .logincard{background:var(--card);border:1px solid var(--line-strong);border-radius:10px;padding:28px;width:100%;max-width:340px;}
   .sitepin{display:flex;align-items:center;gap:6px;}
@@ -1160,7 +1165,7 @@ function persistSiteData(siteId){
   saveLog(siteId, logCache[siteId] || []).catch(()=>{});
 }
 
-function applyMovement(siteId, movementType, stagedList){
+function applyMovement(siteId, movementType, stagedList, proofUrl){
   // Uses the in-memory cache directly (already loaded) instead of re-fetching from
   // storage first — that round trip was the main source of click-to-update lag.
   let list = itemsCache[siteId] || [];
@@ -1183,7 +1188,11 @@ function applyMovement(siteId, movementType, stagedList){
     }
     const st = stockStatus(updated);
     if(st.label === 'Low' || st.label === 'Over') breached.push(`${s.material} (${st.label})`);
-    const entry = { id: uid(), type: movementType, sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: s.qty, by: actor, at: now };
+    // Use the same key Firebase will use for this entry (generated up front) so
+    // the local id and the remote log key always match — this is what lets us
+    // reliably delete/reverse a specific entry later (see deleteLogEntry()).
+    const logKey = rtdb.ref('log/' + siteId).push().key;
+    const entry = { id: logKey, type: movementType, sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: s.qty, by: actor, at: now, proofUrl: proofUrl || null };
     log.push(entry);
     logEntries.push(entry);
   }
@@ -1202,9 +1211,8 @@ async function persistMovement(siteId, stagedList, movementType, logEntries){
   try{
     const updates = {};
     logEntries.forEach(e => {
-      const key = rtdb.ref('log/' + siteId).push().key;
       const copy = Object.assign({}, e); delete copy.id;
-      updates['log/' + siteId + '/' + key] = copy;
+      updates['log/' + siteId + '/' + e.id] = copy;
     });
     await rtdb.ref().update(updates);
   }catch(e){ toast('⚠ Could not sync history to server'); }
@@ -1347,6 +1355,66 @@ rtdb.ref('.info/connected').on('value', (snap)=>{
   if(snap.val() === true) flushPendingSyncs(false);
 });
 
+/* ---------- movement proof photo (mandatory for IN/OUT) ----------
+   Photo is compressed client-side to a small JPEG (long edge capped,
+   quality reduced) before upload, so it stays well under Apps Script's
+   POST size limits and uploads fast even on a slow site connection. ---------- */
+function compressImageFile(file, maxDim, quality){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if(width > height && width > maxDim){ height = Math.round(height * maxDim / width); width = maxDim; }
+        else if(height >= width && height > maxDim){ width = Math.round(width * maxDim / height); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Could not read image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadProofPhoto(file, siteId){
+  const dataUrl = await compressImageFile(file, 1000, 0.6);
+  const res = await apiPost('uploadProof', { dataUrl, filename: `${siteId}_${Date.now()}` });
+  return res.url;
+}
+
+function buildProofField(fieldId){
+  return `
+    <div class="field">
+      <label>Proof photo (required)</label>
+      <input type="file" accept="image/*" capture="environment" id="${fieldId}">
+      <div class="proofpreviewwrap" id="${fieldId}_preview" style="display:none;"></div>
+      <p class="hint">Bill, delivery slip, or a photo of the material — required to save this entry.</p>
+    </div>
+  `;
+}
+
+function wireProofField(fieldId, onChangeValidity){
+  const input = document.getElementById(fieldId);
+  const previewWrap = document.getElementById(fieldId + '_preview');
+  input.addEventListener('change', () => {
+    const file = input.files[0];
+    if(!file){ previewWrap.style.display = 'none'; onChangeValidity(false); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      previewWrap.innerHTML = `<img src="${e.target.result}" alt="Proof preview">`;
+      previewWrap.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+    onChangeValidity(true);
+  });
+}
+
 function openQuickMoveModal(item, defaultType){
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
@@ -1362,31 +1430,44 @@ function openQuickMoveModal(item, defaultType){
         <label>Quantity (${escapeHtml(item.unit||'')})</label>
         <input type="number" id="q_qty" placeholder="e.g. 10" autofocus>
       </div>
+      ${buildProofField('q_proof')}
       <div class="modalbtns">
         <button class="btn" id="q_cancel">Cancel</button>
-        <button class="btn primary" id="q_submit">Save</button>
+        <button class="btn primary" id="q_submit" disabled>Save</button>
       </div>
     </div>
   `;
   document.body.appendChild(overlay);
   let type = defaultType;
+  let hasProof = false;
   const inBtn = document.getElementById('q_in');
   const outBtn = document.getElementById('q_out');
+  const submitBtn = document.getElementById('q_submit');
   inBtn.addEventListener('click', ()=>{ type='IN'; inBtn.className='active-in'; outBtn.className=''; });
   outBtn.addEventListener('click', ()=>{ type='OUT'; outBtn.className='active-out'; inBtn.className=''; });
+  wireProofField('q_proof', (valid)=>{ hasProof = valid; submitBtn.disabled = !valid; });
   const qtyInput = document.getElementById('q_qty');
   setTimeout(()=>qtyInput.focus(), 50);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
   document.getElementById('q_cancel').addEventListener('click', ()=>overlay.remove());
-  document.getElementById('q_submit').addEventListener('click', ()=>{
+  submitBtn.addEventListener('click', async ()=>{
     const qty = Number(qtyInput.value);
     if(!qty || qty <= 0){ toast('Enter a quantity'); return; }
-    const { breached } = applyMovement(activeSiteId, type, [{ sku:item.sku, category:item.category, material:item.material, size:item.size, unit:item.unit, qty }]);
-    overlay.remove();
-    renderSiteList();
-    renderMain();
-    refreshAlertBadge();
-    toast(breached.length > 0 ? `Saved. ⚠ ${item.material} is now ${breached[0].split('(')[1].replace(')','')}` : `${type === 'IN' ? 'Received' : 'Issued'} ${qty} ${item.unit||''}`);
+    if(!hasProof){ toast('Proof photo is required'); return; }
+    const file = document.getElementById('q_proof').files[0];
+    submitBtn.disabled = true; submitBtn.textContent = 'Uploading proof…';
+    try{
+      const proofUrl = await uploadProofPhoto(file, activeSiteId);
+      const { breached } = applyMovement(activeSiteId, type, [{ sku:item.sku, category:item.category, material:item.material, size:item.size, unit:item.unit, qty }], proofUrl);
+      overlay.remove();
+      renderSiteList();
+      renderMain();
+      refreshAlertBadge();
+      toast(breached.length > 0 ? `Saved. ⚠ ${item.material} is now ${breached[0].split('(')[1].replace(')','')}` : `${type === 'IN' ? 'Received' : 'Issued'} ${qty} ${item.unit||''}`);
+    }catch(e){
+      toast('⚠ Proof upload failed — not saved. ' + (e.message||''));
+      submitBtn.disabled = false; submitBtn.textContent = 'Save';
+    }
   });
 }
 
@@ -1438,6 +1519,7 @@ function openMovementModal(){
       </div>
       <button type="button" class="addtolistbtn" id="m_addbtn" disabled>+ Add to list</button>
       <div class="stagelist" id="m_staged"><div class="empty">No items added yet</div></div>
+      ${buildProofField('m_proof')}
       <div class="modalbtns">
         <button class="btn" id="m_cancel">Cancel</button>
         <button class="btn primary" id="m_submit" disabled>Submit all</button>
@@ -1458,6 +1540,12 @@ function openMovementModal(){
   const stagedEl = document.getElementById('m_staged');
   const submitBtn = document.getElementById('m_submit');
   let selectedRow = null;
+  let hasProof = false;
+
+  wireProofField('m_proof', (valid)=>{ hasProof = valid; updateSubmitState(); });
+  function updateSubmitState(){
+    submitBtn.disabled = !(staged.length > 0 && hasProof);
+  }
 
   siteSel.addEventListener('change', ()=>{ targetSiteId = siteSel.value; });
 
@@ -1508,7 +1596,7 @@ function openMovementModal(){
   function renderStaged(){
     if(staged.length === 0){
       stagedEl.innerHTML = '<div class="empty">No items added yet</div>';
-      submitBtn.disabled = true;
+      updateSubmitState();
       return;
     }
     stagedEl.innerHTML = staged.map((s,i) => `
@@ -1522,7 +1610,7 @@ function openMovementModal(){
       staged.splice(Number(b.dataset.i), 1);
       renderStaged();
     }));
-    submitBtn.disabled = false;
+    updateSubmitState();
   }
 
   addBtn.addEventListener('click', ()=>{
@@ -1536,26 +1624,92 @@ function openMovementModal(){
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
   document.getElementById('m_cancel').addEventListener('click', ()=>overlay.remove());
 
-  submitBtn.addEventListener('click', ()=>{
+  submitBtn.addEventListener('click', async ()=>{
     if(staged.length === 0) return;
-    const { breached } = applyMovement(targetSiteId, movementType, staged);
-    overlay.remove();
-    if(targetSiteId !== activeSiteId){
-      selectSite(targetSiteId);
-    } else {
-      renderSiteList();
-      renderMain();
-    }
-    refreshAlertBadge();
-    if(breached.length > 0){
-      toast(`Saved. ⚠ Out of range: ${breached.slice(0,3).join(', ')}${breached.length>3?` +${breached.length-3} more`:''}`);
-    } else {
-      toast(`${staged.length} item${staged.length===1?'':'s'} recorded as ${movementType}`);
+    if(!hasProof){ toast('Proof photo is required'); return; }
+    const file = document.getElementById('m_proof').files[0];
+    submitBtn.disabled = true; submitBtn.textContent = 'Uploading proof…';
+    try{
+      const proofUrl = await uploadProofPhoto(file, targetSiteId);
+      const { breached } = applyMovement(targetSiteId, movementType, staged, proofUrl);
+      overlay.remove();
+      if(targetSiteId !== activeSiteId){
+        selectSite(targetSiteId);
+      } else {
+        renderSiteList();
+        renderMain();
+      }
+      refreshAlertBadge();
+      if(breached.length > 0){
+        toast(`Saved. ⚠ Out of range: ${breached.slice(0,3).join(', ')}${breached.length>3?` +${breached.length-3} more`:''}`);
+      } else {
+        toast(`${staged.length} item${staged.length===1?'':'s'} recorded as ${movementType}`);
+      }
+    }catch(e){
+      toast('⚠ Proof upload failed — not saved. ' + (e.message||''));
+      submitBtn.disabled = false; submitBtn.textContent = 'Submit all';
     }
   });
 }
 
 /* ---------- movement history ---------- */
+
+/* ---------- deleting a wrong log entry (reverses its stock effect) ----------
+   Fixes the bug where deleting a mistaken IN/OUT entry left its effect
+   baked into Current Qty / Report totals forever. Deleting an entry now:
+   1. Removes it from Firebase's log node (and the local cache) — so it
+      disappears from History AND the daily activity report immediately.
+   2. Reverses its exact qty effect on the item via a Firebase transaction
+      (an IN entry's deletion subtracts qty back out; an OUT entry's
+      deletion adds it back) — so Current Qty / status are correct again.
+   3. Archives a copy under deletedLog/{siteId}/{logId} (with who deleted
+      it and when) purely for accountability — this node is never read by
+      History, the report, or any total, so it has zero effect on figures. ---------- */
+async function deleteLogEntry(siteId, logId){
+  const log = logCache[siteId] || [];
+  const entry = log.find(l => l.id === logId);
+  if(!entry) return;
+  if(!confirm(`Delete this ${entry.type} entry (${entry.material}, ${entry.qty} ${entry.unit||''})? Stock will be adjusted back automatically.`)) return;
+
+  const delta = entry.type === 'IN' ? -entry.qty : entry.qty;
+
+  // optimistic local update
+  logCache[siteId] = log.filter(l => l.id !== logId);
+  let items = itemsCache[siteId] || [];
+  const itemIdx = items.findIndex(i => i.sku === entry.sku);
+  let itemId = null;
+  if(itemIdx >= 0){
+    itemId = items[itemIdx].id;
+    items = items.slice();
+    items[itemIdx] = { ...items[itemIdx], qty: (Number(items[itemIdx].qty)||0) + delta };
+    itemsCache[siteId] = items;
+  }
+  renderSiteList();
+  renderMain();
+  refreshAlertBadge();
+  toast('Entry deleted — stock adjusted');
+
+  try{
+    const updates = {};
+    updates['log/' + siteId + '/' + logId] = null;
+    const archived = Object.assign({}, entry, { deletedBy: (currentUser && currentUser.actorName) || 'Unknown', deletedAt: Date.now() });
+    delete archived.id;
+    updates['deletedLog/' + siteId + '/' + logId] = archived;
+    await rtdb.ref().update(updates);
+    if(itemId){
+      await rtdb.ref('items/' + siteId + '/' + itemId).transaction(current => {
+        if(!current) return current;
+        const newQty = (Number(current.qty) || 0) + delta;
+        const status = stockStatus({ qty: newQty, min: current.min, max: current.max }).label;
+        current.qty = newQty;
+        current.alertState = (status === 'Low' || status === 'Over') ? status : '';
+        return current;
+      });
+    }
+  }catch(e){
+    toast('⚠ Could not sync deletion to server — will retry');
+  }
+}
 
 /* ---------- daily activity report (admin) ---------- */
 
@@ -1613,6 +1767,9 @@ async function openReportModal(){
     const matrix = {};
     const alerts = {};
     for(const s of sites){
+      // loadLog() reads the live log node — deleted entries are gone from
+      // here the moment deleteLogEntry() removes them, so they never
+      // appear in this report.
       const log = await loadLog(s.id);
       const cell = {};
       days.forEach(d => cell[d.key] = { inQty: 0, outQty: 0, inNames: new Set(), outNames: new Set() });
@@ -1700,6 +1857,7 @@ async function openHistoryModal(){
     byPerson[name].last = Math.max(byPerson[name].last, l.at);
   });
   const people = Object.entries(byPerson).sort((a,b)=>b[1].last-a[1].last);
+  const isAdmin = currentUser && currentUser.role === 'admin';
 
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
@@ -1720,15 +1878,17 @@ async function openHistoryModal(){
       </div>
       <div class="sectionlabel">All movements</div>
       ` : ''}
-      <div style="max-height:340px; overflow-y:auto;">
+      <div style="max-height:340px; overflow-y:auto;" id="h_list">
         ${sorted.length === 0
           ? '<div class="tableempty">No IN/OUT movements recorded yet for this site.</div>'
           : sorted.map(l => `
-            <div class="logrow">
+            <div class="logrow" data-logid="${l.id}">
               <span class="logbadge ${l.type==='IN'?'in':'out'}">${l.type}</span>
+              ${l.proofUrl ? `<img class="proofthumb" src="${l.proofUrl}" alt="Proof" title="View proof" data-proofurl="${l.proofUrl}">` : ''}
               <span class="lname">${escapeHtml(l.material)}<small>${escapeHtml(l.sku)} · ${escapeHtml(l.size||'')} · by ${escapeHtml(l.by||'Unknown')}</small></span>
               <span class="lqty">${l.qty} ${escapeHtml(l.unit||'')}</span>
               <span class="ldate">${escapeHtml(new Date(l.at).toLocaleString())}</span>
+              ${isAdmin ? `<button class="logdel" data-logid="${l.id}" title="Delete this entry (reverses stock effect)">×</button>` : ''}
             </div>
           `).join('')}
       </div>
@@ -1740,6 +1900,16 @@ async function openHistoryModal(){
   document.body.appendChild(overlay);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
   document.getElementById('h_close').addEventListener('click', ()=>overlay.remove());
+  overlay.querySelectorAll('.proofthumb').forEach(img=>{
+    img.addEventListener('click', ()=>window.open(img.dataset.proofurl, '_blank'));
+  });
+  overlay.querySelectorAll('.logdel').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      await deleteLogEntry(activeSiteId, btn.dataset.logid);
+      overlay.remove();
+      openHistoryModal();
+    });
+  });
 }
 
 /* ---------- auth / login gate ---------- */
