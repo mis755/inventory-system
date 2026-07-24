@@ -1394,6 +1394,34 @@ async function flushPendingSyncs(manual){
   renderSyncWarning(loadPendingSyncs().length);
 }
 
+/* ---------- keep modals visible above the on-screen keyboard ----------
+   Modals use position:fixed + inset:0 and rely on the browser shrinking
+   the layout viewport when the keyboard opens. Chrome does this, but some
+   Android browsers (Google app's built-in browser, some MIUI/UC builds)
+   don't — they just draw the keyboard on top of the full-height page
+   instead, so a bottom-anchored fixed modal (see .overlay's mobile
+   align-items:flex-end) ends up rendered underneath the keyboard, fully
+   hidden. window.visualViewport reports the REAL visible area regardless
+   of which behavior the browser uses, so we use it to explicitly size/
+   position every open .overlay to always match what's actually visible. */
+if (window.visualViewport) {
+  function fitOverlaysToViewport(){
+    const vv = window.visualViewport;
+    document.querySelectorAll('.overlay').forEach(ov => {
+      ov.style.position = 'fixed';
+      ov.style.left = '0px';
+      ov.style.top = vv.offsetTop + 'px';
+      ov.style.width = vv.width + 'px';
+      ov.style.height = vv.height + 'px';
+    });
+  }
+  window.visualViewport.addEventListener('resize', fitOverlaysToViewport);
+  window.visualViewport.addEventListener('scroll', fitOverlaysToViewport);
+  // Also re-run shortly after any new modal is added (e.g. if the keyboard
+  // was already open from a previous field) via a lightweight observer.
+  new MutationObserver(fitOverlaysToViewport).observe(document.body, { childList: true });
+}
+
 rtdb.ref('.info/connected').on('value', (snap)=>{
   if(snap.val() === true) flushPendingSyncs(false);
 });
