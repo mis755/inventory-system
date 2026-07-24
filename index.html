@@ -1514,7 +1514,7 @@ function openQuickMoveModal(item, defaultType){
       </div>
       <div class="field">
         <label>Quantity (${escapeHtml(item.unit||'')})</label>
-        <input type="number" id="q_qty" placeholder="e.g. 10" autofocus>
+        <input type="number" id="q_qty" placeholder="e.g. 10">
       </div>
       ${buildProofField('q_proof')}
       <div class="modalbtns">
@@ -1533,7 +1533,6 @@ function openQuickMoveModal(item, defaultType){
   outBtn.addEventListener('click', ()=>{ type='OUT'; outBtn.className='active-out'; inBtn.className=''; });
   wireProofField('q_proof', (valid)=>{ hasProof = valid; submitBtn.disabled = !valid; });
   const qtyInput = document.getElementById('q_qty');
-  setTimeout(()=>qtyInput.focus(), 50);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
   document.getElementById('q_cancel').addEventListener('click', ()=>overlay.remove());
   submitBtn.addEventListener('click', async ()=>{
