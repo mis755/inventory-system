@@ -1402,10 +1402,48 @@ rtdb.ref('.info/connected').on('value', (snap)=>{
    Photo is compressed client-side to a small JPEG (long edge capped,
    quality reduced) before upload, so it stays well under Apps Script's
    POST size limits and uploads fast even on a slow site connection. ---------- */
+// Camera photos on mid-range phones are often 8-15MB / 4000x3000px (the video
+// showing "12M" in the camera UI confirms this). The old version here read
+// the FULL original file as a base64 data URL via FileReader, decoded it
+// into a full-resolution <img>, THEN drew it to canvas — and wireProofField()
+// below did a SECOND full-resolution FileReader.readAsDataURL just for the
+// preview. Two full-size decodes back-to-back is enough to exhaust memory on
+// budget Android WebViews; the tab silently crashes/reloads, which wipes all
+// in-memory JS state (currentUser, activeSiteId, etc. — nothing is persisted)
+// and drops the user back on the login screen, looking exactly like a forced
+// logout. On some devices the crash happens mid-flow, before the item is
+// even added, which is why some users could never get an item to save.
+// Fix: decode via createImageBitmap with a resize hint (the browser downsamples
+// during decode instead of after, so peak memory stays small) and use a plain
+// object URL instead of a giant base64 string. Falls back to the old
+// Image+canvas path only on browsers without createImageBitmap resize support.
 function compressImageFile(file, maxDim, quality){
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
+  return new Promise(async (resolve, reject) => {
+    let objectUrl;
+    try{
+      if('createImageBitmap' in window){
+        // Ask the decoder to downsample directly — avoids ever holding the
+        // full-resolution bitmap in memory.
+        const probe = await createImageBitmap(file);
+        const srcW = probe.width, srcH = probe.height;
+        let width = srcW, height = srcH;
+        if(srcW > srcH && srcW > maxDim){ height = Math.round(srcH * maxDim / srcW); width = maxDim; }
+        else if(srcH >= srcW && srcH > maxDim){ width = Math.round(srcW * maxDim / srcH); height = maxDim; }
+        probe.close && probe.close();
+        const bitmap = await createImageBitmap(file, { resizeWidth: width, resizeHeight: height, resizeQuality: 'medium' });
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        bitmap.close && bitmap.close();
+        resolve(canvas.toDataURL('image/jpeg', quality));
+        return;
+      }
+    }catch(e){
+      // fall through to the Image+canvas fallback below
+    }
+    try{
+      objectUrl = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
         let { width, height } = img;
@@ -1415,13 +1453,15 @@ function compressImageFile(file, maxDim, quality){
         canvas.width = width; canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(objectUrl);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
-      img.onerror = () => reject(new Error('Could not read image'));
-      img.src = e.target.result;
-    };
-    reader.onerror = () => reject(new Error('Could not read file'));
-    reader.readAsDataURL(file);
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Could not read image')); };
+      img.src = objectUrl;
+    }catch(e2){
+      if(objectUrl) URL.revokeObjectURL(objectUrl);
+      reject(e2);
+    }
   });
 }
 
@@ -1445,15 +1485,18 @@ function buildProofField(fieldId){
 function wireProofField(fieldId, onChangeValidity){
   const input = document.getElementById(fieldId);
   const previewWrap = document.getElementById(fieldId + '_preview');
+  let previewUrl = null;
   input.addEventListener('change', () => {
+    if(previewUrl){ URL.revokeObjectURL(previewUrl); previewUrl = null; }
     const file = input.files[0];
     if(!file){ previewWrap.style.display = 'none'; onChangeValidity(false); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      previewWrap.innerHTML = `<img src="${e.target.result}" alt="Proof preview">`;
-      previewWrap.style.display = 'flex';
-    };
-    reader.readAsDataURL(file);
+    // Object URL just points the <img> at the file directly — no base64
+    // re-encode of the full-resolution photo in memory (that duplicate
+    // decode, on top of the one in compressImageFile, was crashing the
+    // tab on large camera photos and forcing the user back to login).
+    previewUrl = URL.createObjectURL(file);
+    previewWrap.innerHTML = `<img src="${previewUrl}" alt="Proof preview">`;
+    previewWrap.style.display = 'flex';
     onChangeValidity(true);
   });
 }
