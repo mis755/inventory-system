@@ -61,6 +61,9 @@
   .sitetag.active .cnt{color:#fff;opacity:.85;}
   .sitetag .del{opacity:0;position:absolute;right:-2px;top:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   .sitetag:hover .del{opacity:1;}
+  .sitetag .pw{opacity:0;position:absolute;right:20px;top:-6px;width:18px;height:18px;border-radius:50%;background:var(--card);border:1px solid var(--line-strong);font-size:9px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
+  .sitetag:hover .pw{opacity:1;}
+  @media (hover:none){ .sitetag .pw, .sitetag .del{opacity:1;} }
   .empty-rail{padding:14px;font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
   .main{flex:1;padding:32px 40px;min-width:0;}
   .main-empty{display:flex;align-items:center;justify-content:center;height:70vh;color:var(--ink-soft);font-size:14px;text-align:center;max-width:340px;margin:0 auto;line-height:1.6;}
@@ -301,32 +304,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSyChhKLo7Wj6Uuzb_Vw5OQACamkOD8XqDOQ",
-  authDomain: "inventory-7858d.firebaseapp.com",
-  databaseURL: "https://inventory-7858d-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "inventory-7858d",
-  storageBucket: "inventory-7858d.firebasestorage.app",
-  messagingSenderId: "1010639194290",
-  appId: "1:1010639194290:web:c8ce553e0a1102eedd21ab"
-};
-firebase.initializeApp(firebaseConfig);
-const rtdb = firebase.database();
-
-// Anonymous auth so the Realtime Database rules can require auth != null
-// (Firebase Console → Authentication → Sign-in method → Anonymous must be Enabled).
-// Everything that reads/writes rtdb should wait on this promise first.
-const authReady = new Promise((resolve, reject) => {
-  firebase.auth().onAuthStateChanged(user => {
-    if (user) resolve(user);
-  });
-  firebase.auth().signInAnonymously().catch(reject);
-});
-</script>
 <script>
 /* ============================================================
    BACKEND CONNECTION
@@ -341,25 +318,67 @@ function apiReady(){
   return CONFIG.API_URL && !CONFIG.API_URL.includes('PASTE_YOUR');
 }
 
-async function apiGet(action, params){
-  params = params || {};
-  const qs = Object.keys(params).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
-  const url = `${CONFIG.API_URL}?action=${encodeURIComponent(action)}${qs ? '&' + qs : ''}`;
-  const res = await fetch(url, { method: 'GET' });
-  const data = await res.json();
-  if(data.error) throw new Error(data.error);
-  return data;
+/* Every read/write goes to Apps Script (Code.gs → apiCall), which stores
+   it in the Google Sheet. Opened from the Apps Script /exec link it uses
+   google.script.run; opened from Vercel (or any other host) it uses a
+   POST to CONFIG.API_URL. Same results either way. */
+const HAS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
+const SESSION_KEY = 'ssl_session_v2';
+let authToken = null;
+
+function rpc(fn, payload){
+  return new Promise((resolve, reject) => {
+    const done = (res) => {
+      if(!res){ const e = new Error('No response from server'); e.network = true; return reject(e); }
+      if(res.error){
+        const e = new Error(res.error);
+        e.authError = !!res.authError;
+        if(e.authError) handleSessionExpired();
+        return reject(e);
+      }
+      resolve(res);
+    };
+    const netFail = (err) => {
+      const e = new Error('No connection to server — check internet' + (err && err.message ? ' (' + err.message + ')' : ''));
+      e.network = true;
+      reject(e);
+    };
+    if(HAS_GAS){
+      google.script.run.withSuccessHandler(done).withFailureHandler(netFail).apiCall(fn, payload || {}, authToken);
+    } else {
+      fetch(CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'rpc', fn, payload: payload || {}, token: authToken })
+      }).then(r => r.json()).then(done, netFail);
+    }
+  });
 }
 
-async function apiPost(action, body){
-  const res = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(Object.assign({ action }, body))
-  });
-  const data = await res.json();
-  if(data.error) throw new Error(data.error);
-  return data;
+function saveSession(){
+  try{ localStorage.setItem(SESSION_KEY, JSON.stringify({ token: authToken, user: currentUser, savedAt: Date.now() })); }catch(e){}
+}
+function loadSession(){
+  try{
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    // server enforces the real expiry; this just skips obviously old ones
+    if(s && s.token && s.user && Date.now() - (s.savedAt || 0) < 12 * 3600 * 1000) return s;
+  }catch(e){}
+  return null;
+}
+function clearSession(){
+  authToken = null;
+  try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
+}
+let sessionExpiredShown = false;
+function handleSessionExpired(){
+  clearSession();
+  if(currentUser && !sessionExpiredShown){
+    sessionExpiredShown = true;
+    toast('Session expired — please log in again');
+    showLogin();
+    setTimeout(()=>{ sessionExpiredShown = false; }, 3000);
+  }
 }
 
 let sites = [];
@@ -369,7 +388,6 @@ let search = '';
 let catalog = [];
 let sourceMeta = { url: '', lastSynced: null };
 let currentUser = null;
-let adminPass = null;
 
 const SEED_CATALOG_TSV = `Sr	Category	Material	Size / Grade	Unit	HSN Code	GST %
 SKU-1	Steel / Reinforcement	TMT Bar	8mm	Pcs	7214	18
@@ -580,90 +598,48 @@ async function saveSites(){
   // directly against Firebase instead of a full resync.
 }
 
-async function loadAdminPass(){
-  // populated by apiBootstrap()
-}
-async function saveAdminPass(pass){
-  try{
-    await rtdb.ref('config/adminPass').set(pass);
-    adminPass = pass;
-  }catch(e){
-    toast('⚠ ' + e.message);
-    throw e;
-  }
-}
-
 async function loadItems(siteId){
-  if(itemsCache[siteId]) return itemsCache[siteId];
-  try{
-    const snap = await rtdb.ref('items/' + siteId).once('value');
-    itemsCache[siteId] = arrFromObj(snap.val());
-    return itemsCache[siteId];
-  }catch(e){
-    itemsCache[siteId] = [];
-    return [];
-  }
-}
-
-async function saveItems(siteId, items){
-  itemsCache[siteId] = items;
-  try{
-    await rtdb.ref('items/' + siteId).set(objFromArray(items));
-  }catch(e){
-    toast('⚠ Could not sync to server — will retry');
-  }
+  // all allowed sites are loaded at login by loadSessionData()
+  if(!itemsCache[siteId]) itemsCache[siteId] = [];
+  return itemsCache[siteId];
 }
 
 let logCache = {};
 
 async function loadLog(siteId){
-  if(logCache[siteId]) return logCache[siteId];
-  try{
-    const snap = await rtdb.ref('log/' + siteId).once('value');
-    logCache[siteId] = arrFromObj(snap.val());
-    return logCache[siteId];
-  }catch(e){
-    logCache[siteId] = [];
-    return [];
-  }
+  if(!logCache[siteId]) logCache[siteId] = [];
+  return logCache[siteId];
 }
 
-async function saveLog(siteId, log){
-  logCache[siteId] = log;
-  try{
-    await rtdb.ref('log/' + siteId).set(objFromArray(log));
-  }catch(e){
-    toast('Could not save history');
-  }
-}
-
-/* ---------- one-shot load of sites + items + log (Firebase, fast)
-   plus the live catalog (still read from the Material_Master Google
-   Sheet through the lightweight Apps Script endpoint) ---------- */
+/* ---------- before login: site list (no passwords) + live catalog ---------- */
 async function apiBootstrap(){
-  await authReady;
-  const [sitesSnap, itemsSnap, logSnap, adminPassSnap, catalogData] = await Promise.all([
-    rtdb.ref('sites').once('value'),
-    rtdb.ref('items').once('value'),
-    rtdb.ref('log').once('value'),
-    rtdb.ref('config/adminPass').once('value'),
-    apiGet('catalog').catch(() => ({ catalog: [] }))
-  ]);
-
-  sites = arrFromObj(sitesSnap.val());
-  adminPass = adminPassSnap.val() || null;
-
-  itemsCache = {};
-  const itemsVal = itemsSnap.val() || {};
-  Object.keys(itemsVal).forEach(siteId => { itemsCache[siteId] = arrFromObj(itemsVal[siteId]); });
-
-  logCache = {};
-  const logVal = logSnap.val() || {};
-  Object.keys(logVal).forEach(siteId => { logCache[siteId] = arrFromObj(logVal[siteId]); });
-
-  catalog = catalogData.catalog || [];
+  const res = await rpc('bootstrap');
+  sites = res.sites || [];
+  catalog = res.catalog || [];
   sourceMeta = { url: '', lastSynced: Date.now() };
+  itemsCache = {};
+  logCache = {};
+  alertItems = [];
+}
+
+/* ---------- after login: stock + log this user may see ---------- */
+async function loadSessionData(){
+  const res = await rpc('loadData');
+  sites = res.sites || [];
+  itemsCache = {};
+  logCache = {};
+  Object.keys(res.items || {}).forEach(id => { itemsCache[id] = res.items[id]; });
+  Object.keys(res.log || {}).forEach(id => { logCache[id] = res.log[id]; });
   alertItems = computeAlerts();
+}
+
+// Replaces one site's items with the server's copy (after a write).
+function applyServerItems(siteId, items){
+  if(!Array.isArray(items)) return;
+  itemsCache[siteId] = items;
+  renderSiteList();
+  if(activeSiteId === siteId) renderMain();
+  refreshAlertBadge();
 }
 
 /* ---------- storage: master catalog ---------- */
@@ -786,7 +762,7 @@ function openSettingsModal(){
     const btn = overlay.querySelector('#refreshCatalogBtn');
     btn.disabled = true; btn.textContent = 'Refreshing…';
     try{
-      const data = await apiGet('catalog');
+      const data = await rpc('catalog');
       catalog = data.catalog || [];
       sourceMeta = { url: '', lastSynced: Date.now() };
       renderCatalogPill();
@@ -817,14 +793,20 @@ function renderSiteList(){
     return `<div class="sitetag ${s.id===activeSiteId?'active':''}" data-id="${s.id}">
       <span class="name">${escapeHtml(s.name)}</span>
       <span class="cnt">${count===null?'…':count}</span>
-      ${isAdmin ? `<button class="del" data-id="${s.id}" title="Delete site">×</button>` : ''}
+      ${isAdmin ? `<button class="pw" data-id="${s.id}" title="Set a new password for this site">🔑</button><button class="del" data-id="${s.id}" title="Delete site">×</button>` : ''}
     </div>`;
   }).join('');
 
   el.querySelectorAll('.sitetag').forEach(node=>{
     node.addEventListener('click', (e)=>{
-      if(e.target.classList.contains('del')) return;
+      if(e.target.classList.contains('del') || e.target.classList.contains('pw')) return;
       selectSite(node.dataset.id);
+    });
+  });
+  el.querySelectorAll('.pw').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      resetSitePassword(btn.dataset.id);
     });
   });
   el.querySelectorAll('.del').forEach(btn=>{
@@ -857,12 +839,23 @@ async function deleteSite(id){
   refreshAlertBadge();
   toast('Site deleted');
   try{
-    await Promise.all([
-      rtdb.ref('sites/' + id).remove(),
-      rtdb.ref('items/' + id).remove(),
-      rtdb.ref('log/' + id).remove()
-    ]);
-  }catch(e){ toast('⚠ Could not sync deletion to server — will retry'); }
+    await rpc('deleteSite', { siteId: id });
+  }catch(e){ toast('⚠ Site not deleted on server: ' + e.message); }
+}
+
+// Admin: set a new password for a site (stored as a hash in the sheet).
+async function resetSitePassword(id){
+  const site = sites.find(s=>s.id===id);
+  if(!site) return;
+  const pin = (prompt(`New password for site "${site.name}" (at least 4 characters):`) || '').trim();
+  if(!pin) return;
+  if(pin.length < 4){ toast('Password must be at least 4 characters'); return; }
+  try{
+    await rpc('setSitePassword', { siteId: id, password: pin });
+    toast(`Password updated — share it with ${site.assignedName || 'the site person'}`);
+  }catch(e){
+    toast('⚠ ' + e.message);
+  }
 }
 
 document.getElementById('newSiteBtn').addEventListener('click', addSite);
@@ -884,10 +877,8 @@ async function addSite(){
   const addBtn = document.getElementById('newSiteBtn');
   addBtn.disabled = true;
   try{
-    const ref = rtdb.ref('sites').push();
-    const site = { id: ref.key, name, pin, assignedName, createdAt: Date.now() };
-    const toSave = Object.assign({}, site); delete toSave.id;
-    await ref.set(toSave);
+    const res = await rpc('addSite', { id: uid(), name, assignedName, password: pin });
+    const site = res.site;
     sites.push(site);
     itemsCache[site.id] = [];
     logCache[site.id] = [];
@@ -1167,7 +1158,10 @@ function openItemModal(itemId){
     const maxVal = document.getElementById('f_max').value;
     const min = minVal === '' ? null : Number(minVal);
     const max = maxVal === '' ? null : Number(maxVal);
-    let list = itemsCache[activeSiteId] || [];
+    const siteIdForSave = activeSiteId;
+    const before = itemsCache[siteIdForSave] || [];
+    const newId = uid();
+    let list = before;
     const dupe = list.find(i => i.sku === selectedRow.sku && (!existing || i.id !== existing.id));
     if(dupe){
       list = list.map(i => i.id === dupe.id ? {...i, qty, min, max} : i);
@@ -1175,7 +1169,7 @@ function openItemModal(itemId){
     } else if(existing){
       list = list.map(i => i.id === existing.id ? {...i, sku:selectedRow.sku, category:selectedRow.category, material:selectedRow.material, size:selectedRow.size, unit:selectedRow.unit, hsn:selectedRow.hsn, gst:selectedRow.gst, qty, min, max} : i);
     } else {
-      list = [...list, { id: uid(), sku:selectedRow.sku, category:selectedRow.category, material:selectedRow.material, size:selectedRow.size, unit:selectedRow.unit, hsn:selectedRow.hsn, gst:selectedRow.gst, qty, min, max, addedAt: Date.now() }];
+      list = [...list, { id: newId, sku:selectedRow.sku, category:selectedRow.category, material:selectedRow.material, size:selectedRow.size, unit:selectedRow.unit, hsn:selectedRow.hsn, gst:selectedRow.gst, qty, min, max, addedAt: Date.now() }];
     }
     itemsCache[activeSiteId] = list;
     overlay.remove();
@@ -1183,30 +1177,30 @@ function openItemModal(itemId){
     renderMain();
     refreshAlertBadge();
     toast(dupe ? 'Quantity updated' : (existing ? 'Item updated' : 'Item added'));
-    saveItems(activeSiteId, list).catch(()=>toast('⚠ Could not sync to server — will retry'));
+    rpc('saveItem', { siteId: siteIdForSave, existingId: existing ? existing.id : null, newId,
+      row: { sku:selectedRow.sku, category:selectedRow.category, material:selectedRow.material, size:selectedRow.size, unit:selectedRow.unit, hsn:selectedRow.hsn, gst:selectedRow.gst },
+      qty, min, max })
+      .then(res => applyServerItems(siteIdForSave, res.items))
+      .catch(e => { applyServerItems(siteIdForSave, before); toast('⚠ Not saved: ' + e.message); });
   });
 }
 
 function deleteItem(itemId){
-  let items = itemsCache[activeSiteId] || [];
-  items = items.filter(i => i.id !== itemId);
-  itemsCache[activeSiteId] = items;
+  const siteId = activeSiteId;
+  const before = itemsCache[siteId] || [];
+  itemsCache[siteId] = before.filter(i => i.id !== itemId);
   renderSiteList();
   renderMain();
   refreshAlertBadge();
   toast('Item deleted');
-  saveItems(activeSiteId, items).catch(()=>toast('⚠ Could not sync to server — will retry'));
+  rpc('deleteItem', { siteId, itemId })
+    .then(res => applyServerItems(siteId, res.items))
+    .catch(e => { applyServerItems(siteId, before); toast('⚠ Not deleted: ' + e.message); });
 }
 
 /* ---------- material IN / OUT movement form ---------- */
 
 /* ---------- shared movement application logic ---------- */
-
-function persistSiteData(siteId){
-  // fire-and-forget: write-behind so clicks feel instant; UI already reflects the change
-  saveItems(siteId, itemsCache[siteId] || []).catch(()=>toast('⚠ Could not sync to server — will retry'));
-  saveLog(siteId, logCache[siteId] || []).catch(()=>{});
-}
 
 function applyMovement(siteId, movementType, stagedList, proofUrl){
   // Uses the in-memory cache directly (already loaded) instead of re-fetching from
@@ -1234,66 +1228,56 @@ function applyMovement(siteId, movementType, stagedList, proofUrl){
     // Use the same key Firebase will use for this entry (generated up front) so
     // the local id and the remote log key always match — this is what lets us
     // reliably delete/reverse a specific entry later (see deleteLogEntry()).
-    const logKey = rtdb.ref('log/' + siteId).push().key;
+    const logKey = uid() + Math.random().toString(36).slice(2,6);
     const entry = { id: logKey, type: movementType, sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit, qty: s.qty, by: actor, at: now, proofUrl: proofUrl || null };
     log.push(entry);
     logEntries.push(entry);
   }
   itemsCache[siteId] = list;
   logCache[siteId] = log;
-  persistMovement(siteId, stagedList, movementType, logEntries);
+  persistMovement(siteId, movementType, stagedList.map((s, i) => ({
+    logId: logEntries[i].id,
+    itemId: (list.find(x => x.sku === s.sku) || {}).id,
+    sku: s.sku, category: s.category, material: s.material, size: s.size, unit: s.unit, qty: s.qty
+  })), proofUrl);
   return { breached };
 }
 
 // Runs in the background after applyMovement already updated the UI.
-// Each item's qty is applied as an atomic Firebase transaction (read
-// current value, add delta, write back) so two people recording
-// movements on the same item at the same moment can never silently
-// overwrite each other — this is the concurrency-safety fix.
-async function persistMovement(siteId, stagedList, movementType, logEntries){
+// The server applies all lines inside a lock (so two people recording at
+// the same moment can't overwrite each other) and skips any line whose
+// logId it has already saved, so retrying is always safe.
+async function persistMovement(siteId, type, lines, proofUrl){
+  const entry = { key: uid(), siteId, type, lines, proofUrl: proofUrl || null };
   try{
-    const updates = {};
-    logEntries.forEach(e => {
-      const copy = Object.assign({}, e); delete copy.id;
-      updates['log/' + siteId + '/' + e.id] = copy;
-    });
-    await rtdb.ref().update(updates);
-  }catch(e){ toast('⚠ Could not sync history to server'); }
-
-  for(const s of stagedList){
-    const delta = movementType === 'IN' ? s.qty : -s.qty;
-    const localItem = (itemsCache[siteId] || []).find(i => i.sku === s.sku);
-    const itemId = localItem ? localItem.id : uid();
-    const cat = catalog.find(c => c.sku === s.sku);
-    const transitionRef = {};
-    try{
-      const result = await syncItemWithRetry(siteId, itemId, delta, cat, s, transitionRef, 1);
-      if(result.committed && transitionRef.transitioned){
-        const val = result.snapshot.val();
-        apiPost('sendAlertEmail', { alerts: [{ material: val.material, sku: val.sku, qty: val.qty, min: val.min, max: val.max, status: transitionRef.status, siteName: (sites.find(x=>x.id===siteId)||{}).name || siteId }] }).catch(()=>{});
-      }
-    }catch(e){
-      // 3 attempts already failed (see syncItemWithRetry) — park it so it
-      // isn't silently lost; retried automatically on reconnect, or via the
-      // sticky banner's "Retry now" button.
-      queuePendingSync({ siteId, itemId, delta, cat, s });
-      toast('⚠ ' + s.material + ' not saved yet — will retry automatically');
+    const res = await rpc('movement', entry);
+    applyServerItems(siteId, res.items);
+  }catch(e){
+    if(e.network || e.authError){
+      queuePendingSync(entry);
+      toast('⚠ Not saved yet — will retry automatically');
+    } else {
+      toast('⚠ Not saved: ' + e.message);
+      reloadFromServer();
     }
   }
 }
 
-/* ---------- resilient item sync (retry + offline/reconnect queue) ----------
-   Movement LOG writes use rtdb...update(), which the Firebase SDK queues
-   locally and flushes on reconnect even if offline at call time. Item STOCK
-   writes use a transaction() (needed for the concurrency-safety guarantee —
-   see Concurrency section), but a transaction requires a live round trip to
-   read the current value first, so it does NOT reliably queue while the
-   connection is still coming up (e.g. right after page load) — it can fail
-   silently. This wrapper adds automatic retries and, if those are exhausted,
-   parks the item in a persisted queue that is retried the moment Firebase
-   reports reconnection, with a sticky (non-auto-dismissing) banner so a
-   failure is never invisible the way a normal toast would be. ---------- */
-const PENDING_SYNC_KEY = 'ssl_pendingItemSync';
+// After a rejected write, bring this screen back in line with the sheet.
+async function reloadFromServer(){
+  try{
+    await loadSessionData();
+    renderSiteList();
+    renderMain();
+    refreshAlertBadge();
+  }catch(e){}
+}
+
+/* ---------- unsaved-movement queue (survives reloads) ----------
+   If a movement can't reach the server (no network, or the login
+   expired) it is parked here in this browser and retried when the
+   connection comes back, after the next login, or via "Retry now". */
+const PENDING_SYNC_KEY = 'ssl_pendingMovements_v2';
 
 function loadPendingSyncs(){
   try{ return JSON.parse(localStorage.getItem(PENDING_SYNC_KEY) || '[]'); }catch(e){ return []; }
@@ -1302,13 +1286,13 @@ function savePendingSyncs(list){
   try{ localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(list)); }catch(e){}
 }
 function queuePendingSync(entry){
-  const list = loadPendingSyncs();
+  const list = loadPendingSyncs().filter(x => x.key !== entry.key);
   list.push(entry);
   savePendingSyncs(list);
   renderSyncWarning(list.length);
 }
-function removePendingSync(siteId, itemId){
-  let list = loadPendingSyncs().filter(e => !(e.siteId === siteId && e.itemId === itemId));
+function removePendingSync(key){
+  const list = loadPendingSyncs().filter(e => e.key !== key);
   savePendingSyncs(list);
   renderSyncWarning(list.length);
 }
@@ -1326,68 +1310,26 @@ function renderSyncWarning(count){
     document.body.appendChild(syncWarningEl);
     syncWarningEl.querySelector('#syncretrybtn').addEventListener('click', ()=>flushPendingSyncs(true));
   }
-  syncWarningEl.querySelector('#syncwarningtext').textContent = `⚠ ${count} item${count===1?'':'s'} not saved to server yet — will retry automatically`;
+  syncWarningEl.querySelector('#syncwarningtext').textContent = `⚠ ${count} entr${count===1?'y':'ies'} not saved to server yet — will retry automatically`;
   syncWarningEl.style.display = 'flex';
 }
 
-async function itemTransactionOnce(siteId, itemId, delta, cat, s, transitionRef){
-  const result = await rtdb.ref('items/' + siteId + '/' + itemId).transaction(current => {
-    if(current === null){
-      const fresh = { sku:s.sku, category:s.category, material:s.material, size:s.size, unit:s.unit,
-        qty: delta, min: cat && cat.min != null ? cat.min : null, max: cat && cat.max != null ? cat.max : null,
-        addedAt: Date.now(), alertState: '' };
-      const status = stockStatus(fresh).label;
-      fresh.alertState = (status === 'Low' || status === 'Over') ? status : '';
-      if(transitionRef){ transitionRef.transitioned = !!fresh.alertState; transitionRef.status = fresh.alertState; }
-      return fresh;
-    }
-    const prevAlertState = current.alertState || '';
-    const newQty = (Number(current.qty) || 0) + delta;
-    const status = stockStatus({ qty: newQty, min: current.min, max: current.max }).label;
-    const nextAlertState = (status === 'Low' || status === 'Over') ? status : '';
-    current.qty = newQty;
-    current.alertState = nextAlertState;
-    if(transitionRef){ transitionRef.transitioned = !!nextAlertState && nextAlertState !== prevAlertState; transitionRef.status = nextAlertState; }
-    return current;
-  });
-  if(!result.committed) throw new Error('transaction not committed');
-  return result;
-}
-
-async function syncItemWithRetry(siteId, itemId, delta, cat, s, transitionRef, attempt){
-  attempt = attempt || 1;
-  try{
-    return await itemTransactionOnce(siteId, itemId, delta, cat, s, transitionRef);
-  }catch(e){
-    if(attempt < 3){
-      await new Promise(r => setTimeout(r, attempt * 700));
-      return syncItemWithRetry(siteId, itemId, delta, cat, s, transitionRef, attempt + 1);
-    }
-    throw e;
-  }
-}
-
-// Retries everything currently parked in the pending queue (called on
-// reconnect and via the banner's "Retry now" button). Safe to call anytime,
-// including with an empty queue.
 let flushingPendingSyncs = false;
 async function flushPendingSyncs(manual){
-  if(flushingPendingSyncs) return;
+  if(flushingPendingSyncs || !authToken) return;
   const list = loadPendingSyncs();
   if(list.length === 0) return;
   flushingPendingSyncs = true;
   if(manual) toast('Retrying…');
   for(const entry of list){
-    const transitionRef = {};
     try{
-      const result = await syncItemWithRetry(entry.siteId, entry.itemId, entry.delta, entry.cat, entry.s, transitionRef, 1);
-      removePendingSync(entry.siteId, entry.itemId);
-      if(result.committed && transitionRef.transitioned){
-        const val = result.snapshot.val();
-        apiPost('sendAlertEmail', { alerts: [{ material: val.material, sku: val.sku, qty: val.qty, min: val.min, max: val.max, status: transitionRef.status, siteName: (sites.find(x=>x.id===entry.siteId)||{}).name || entry.siteId }] }).catch(()=>{});
-      }
+      const res = await rpc('movement', entry);
+      removePendingSync(entry.key);
+      if(itemsCache[entry.siteId]) applyServerItems(entry.siteId, res.items);
     }catch(e){
-      // still failing — leave it in the queue for the next reconnect/retry
+      if(e.network || e.authError) break;          // still offline / logged out — try later
+      removePendingSync(entry.key);                // server refused it (e.g. no access) — don't loop forever
+      toast('⚠ A queued entry was rejected: ' + e.message);
     }
   }
   flushingPendingSyncs = false;
@@ -1422,9 +1364,8 @@ if (window.visualViewport) {
   new MutationObserver(fitOverlaysToViewport).observe(document.body, { childList: true });
 }
 
-rtdb.ref('.info/connected').on('value', (snap)=>{
-  if(snap.val() === true) flushPendingSyncs(false);
-});
+window.addEventListener('online', ()=>flushPendingSyncs(false));
+setInterval(()=>{ if(loadPendingSyncs().length) flushPendingSyncs(false); }, 60000);
 
 /* ---------- movement proof photo (mandatory for IN/OUT) ----------
    Photo is compressed client-side to a small JPEG (long edge capped,
@@ -1495,7 +1436,7 @@ function compressImageFile(file, maxDim, quality){
 
 async function uploadProofPhoto(file, siteId){
   const dataUrl = await compressImageFile(file, 1000, 0.6);
-  const res = await apiPost('uploadProof', { dataUrl, filename: `${siteId}_${Date.now()}` });
+  const res = await rpc('uploadProof', { dataUrl, filename: `${siteId}_${Date.now()}` });
   return res.url;
 }
 
@@ -1503,7 +1444,7 @@ function buildProofField(fieldId){
   return `
     <div class="field">
       <label>Proof photo (required)</label>
-      <input type="file" accept="image/*" id="${fieldId}">
+      <input type="file" accept="image/&#42;" id="${fieldId}">
       <div class="proofpreviewwrap" id="${fieldId}_preview" style="display:none;"></div>
       <p class="hint">Bill, delivery slip, or a photo of the material — required to save this entry.</p>
     </div>
@@ -1803,24 +1744,11 @@ async function deleteLogEntry(siteId, logId){
   toast('Entry deleted — stock adjusted');
 
   try{
-    const updates = {};
-    updates['log/' + siteId + '/' + logId] = null;
-    const archived = Object.assign({}, entry, { deletedBy: (currentUser && currentUser.actorName) || 'Unknown', deletedAt: Date.now() });
-    delete archived.id;
-    updates['deletedLog/' + siteId + '/' + logId] = archived;
-    await rtdb.ref().update(updates);
-    if(itemId){
-      await rtdb.ref('items/' + siteId + '/' + itemId).transaction(current => {
-        if(!current) return current;
-        const newQty = (Number(current.qty) || 0) + delta;
-        const status = stockStatus({ qty: newQty, min: current.min, max: current.max }).label;
-        current.qty = newQty;
-        current.alertState = (status === 'Low' || status === 'Over') ? status : '';
-        return current;
-      });
-    }
+    const res = await rpc('deleteLog', { siteId, logId });
+    applyServerItems(siteId, res.items);
   }catch(e){
-    toast('⚠ Could not sync deletion to server — will retry');
+    toast('⚠ Entry not deleted on server: ' + e.message);
+    reloadFromServer();
   }
 }
 
@@ -2142,13 +2070,20 @@ function showLogin(){
   adminInput.value = '';
   document.getElementById('login_admin_name').value = '';
   document.getElementById('loginAdminHint').textContent = '';
-  if(!adminPass){
-    adminLabel.textContent = 'Set a new admin password (first time setup)';
-    adminBtn.textContent = 'Create password and continue';
-  } else {
-    adminLabel.textContent = 'Admin password';
-    adminBtn.textContent = 'Continue';
-  }
+  adminLabel.textContent = 'Admin password';
+  adminBtn.textContent = 'Continue';
+}
+
+function setBusy(btn, busy, label){
+  btn.disabled = busy;
+  btn.textContent = busy ? 'Checking…' : label;
+}
+
+async function finishLogin(){
+  await loadSessionData();
+  saveSession();
+  await startApp();
+  flushPendingSyncs(false);
 }
 
 document.getElementById('loginTabSite').addEventListener('click', ()=>{
@@ -2184,13 +2119,21 @@ document.getElementById('loginSiteBtn').addEventListener('click', async ()=>{
   const site = sites.find(s=>s.id===siteId);
   if(!site){ hint.textContent = 'Pick a site first.'; return; }
   if(!pin){ hint.textContent = 'Enter the password.'; return; }
-  if(String(site.pin) !== String(pin)){ hint.textContent = 'Wrong password — check with your admin.'; return; }
-  const myName = (site.assignedName || '').trim().toLowerCase();
-  const siteIds = myName
-    ? sites.filter(s => (s.assignedName || '').trim().toLowerCase() === myName).map(s => s.id)
-    : [site.id];
-  currentUser = { role: 'site', siteId, siteIds, actorName: site.assignedName || site.name };
-  await startApp();
+  const btn = document.getElementById('loginSiteBtn');
+  hint.textContent = '';
+  setBusy(btn, true);
+  try{
+    const res = await rpc('login', { role: 'site', siteId, password: pin });
+    authToken = res.token;
+    currentUser = { role: 'site', siteId, siteIds: res.siteIds || [siteId], actorName: res.actorName || site.assignedName || site.name };
+    await finishLogin();
+  }catch(e){
+    clearSession();
+    currentUser = null;
+    hint.textContent = e.message || 'Login failed.';
+  }finally{
+    setBusy(btn, false, 'Enter site');
+  }
 });
 document.getElementById('login_pin').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginSiteBtn').click(); });
 
@@ -2199,19 +2142,31 @@ document.getElementById('loginAdminBtn').addEventListener('click', async ()=>{
   const val = document.getElementById('login_admin_pass').value;
   const hint = document.getElementById('loginAdminHint');
   if(!val || val.length < 4){ hint.textContent = 'Use at least 4 characters.'; return; }
-  if(!adminPass){
-    await saveAdminPass(val);
-    currentUser = { role: 'admin', actorName: name };
-    await startApp();
-  } else {
-    if(String(val) !== String(adminPass)){ hint.textContent = 'Wrong password.'; return; }
-    currentUser = { role: 'admin', actorName: name };
-    await startApp();
+  const btn = document.getElementById('loginAdminBtn');
+  hint.textContent = '';
+  setBusy(btn, true);
+  try{
+    const res = await rpc('login', { role: 'admin', password: val, name });
+    authToken = res.token;
+    currentUser = { role: 'admin', actorName: res.actorName || name };
+    await finishLogin();
+  }catch(e){
+    clearSession();
+    currentUser = null;
+    hint.textContent = e.message || 'Login failed.';
+  }finally{
+    setBusy(btn, false, 'Continue');
   }
 });
 document.getElementById('login_admin_pass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginAdminBtn').click(); });
 
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  const pending = loadPendingSyncs().length;
+  if(pending > 0 && !confirm(`${pending} entr${pending===1?'y is':'ies are'} not saved to the server yet. Log out anyway? They will be saved after the next login on this device.`)) return;
+  clearSession();
+  itemsCache = {};
+  logCache = {};
+  alertItems = [];
   showLogin();
 });
 
@@ -2234,12 +2189,24 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>{
     document.body.innerHTML = `<div style="max-width:520px;margin:80px auto;padding:24px;font-family:sans-serif;line-height:1.6;">
       <h2>Could not reach the sheet backend</h2>
       <p>${escapeHtml(e.message || 'Unknown error')}</p>
-      <p>Check that CONFIG.API_URL is correct and the Apps Script is deployed with
-      "Who has access: Anyone".</p>
+      <p>Check your internet connection and reload. If it keeps happening, the Apps Script
+      deployment must have "Who has access: Anyone".</p>
     </div>`;
     return;
   }
   renderSyncWarning(loadPendingSyncs().length);
+  const saved = loadSession();
+  if(saved){
+    authToken = saved.token;
+    currentUser = saved.user;
+    try{
+      await finishLogin();
+      return;
+    }catch(e){
+      clearSession();
+      currentUser = null;
+    }
+  }
   showLogin();
 })();
 </script>
